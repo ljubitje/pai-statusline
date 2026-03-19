@@ -49,13 +49,6 @@ eval "$(jq -r '
   "USER_TZ=" + (.principal.timezone // "UTC" | @sh) + "\n" +
   "PAI_VERSION=" + (.pai.version // "—" | @sh) + "\n" +
   "COMPACTION_THRESHOLD=" + (.contextDisplay.compactionThreshold // 100 | tostring) + "\n" +
-  "skills_count=" + (.counts.skills // 0 | tostring) + "\n" +
-  "workflows_count=" + (.counts.workflows // 0 | tostring) + "\n" +
-  "hooks_count=" + (.counts.hooks // 0 | tostring) + "\n" +
-  "learnings_count=" + (.counts.signals // 0 | tostring) + "\n" +
-  "files_count=" + (.counts.files // 0 | tostring) + "\n" +
-  "work_count=" + (.counts.work // 0 | tostring) + "\n" +
-  "sessions_count=" + (.counts.sessions // 0 | tostring) + "\n" +
   "research_count=" + (.counts.research // 0 | tostring) + "\n" +
   "ratings_count=" + (.counts.ratings // 0 | tostring)
 ' "$SETTINGS_FILE" 2>/dev/null)"
@@ -70,15 +63,11 @@ eval "$(echo "$input" | jq -r '
   "session_id=" + (.session_id // "" | @sh) + "\n" +
   "model_name=" + (.model.display_name // "unknown" | @sh) + "\n" +
   "cc_version_json=" + (.version // "" | @sh) + "\n" +
-  "context_max=" + (.context_window.context_window_size // 200000 | tostring) + "\n" +
-  "context_pct=" + (.context_window.used_percentage // 0 | tostring) + "\n" +
-  "context_remaining=" + (.context_window.remaining_percentage // 100 | tostring)
+  "context_pct=" + (.context_window.used_percentage // 0 | tostring)
 ' 2>/dev/null)"
 
 # Ensure defaults for critical numeric values
 context_pct=${context_pct:-0}
-context_max=${context_max:-200000}
-context_remaining=${context_remaining:-100}
 
 # Get Claude Code version
 if [ -n "$cc_version_json" ] && [ "$cc_version_json" != "unknown" ]; then
@@ -158,10 +147,7 @@ wait
 [ -f "$_parallel_tmp/git.sh" ] && source "$_parallel_tmp/git.sh"
 rm -rf "$_parallel_tmp" 2>/dev/null
 
-# Pre-load learning cache (used by LEARNING section)
 LEARNING_CACHE="$PAI_DIR/MEMORY/STATE/learning-cache.sh"
-
-learning_count="$learnings_count"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TERMINAL WIDTH DETECTION
@@ -668,11 +654,6 @@ fi
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Context display - scale to compaction threshold if configured
-context_max="${context_max:-200000}"
-max_k=$((context_max / 1000))
-
-# COMPACTION_THRESHOLD already extracted in consolidated settings jq call above
-
 # Get raw percentage from Claude Code
 raw_pct="${context_pct%%.*}"  # Remove decimals
 [ -z "$raw_pct" ] && raw_pct=0

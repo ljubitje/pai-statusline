@@ -80,12 +80,14 @@ The statusline reads configuration from `settings.json`:
 
 The script receives JSON from Claude Code via stdin containing session data (context window, model, tokens, etc.). It then:
 
-1. Parses the input JSON in a single `jq` call
-2. Launches parallel background jobs for git, counts, usage API, and service status
-3. Detects terminal width (Kitty IPC > TTY > tput > cache > env)
-4. Renders each section according to the responsive mode
+1. Parses settings + input JSON in two `jq` calls (all data extracted upfront)
+2. Launches git status in a background subshell
+3. Sources pre-built `.sh` caches for usage and service status (instant, no parsing)
+4. Detects terminal width (Kitty IPC > TTY > tput > cache > env)
+5. Renders each section according to the responsive mode
+6. Fire-and-forget: refreshes usage/status caches in background for next render
 
-Total render time target: <200ms.
+Typical render time: ~100ms.
 
 ## Dependencies
 
