@@ -27,9 +27,9 @@ Adapts to terminal width automatically, picking the largest tier that fits:
 
 | Tier | Statusline |
 |------|------------|
-| **full** | ![full tier](tier-full.png) |
-| **dense** | ![dense tier](tier-dense.png) |
-| **ultradense** | ![ultradense tier](tier-ultradense.png) |
+| **full** | <img src="tier-full.png" height="48" alt="full tier"> |
+| **dense** | <img src="tier-dense.png" height="48" alt="dense tier"> |
+| **ultradense** | <img src="tier-ultradense.png" height="48" alt="ultradense tier"> |
 
 ## Installation via PAI (recommended)
 
