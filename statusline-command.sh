@@ -322,13 +322,10 @@ COUNTSEOF
             "usage_7d_reset=" + (.seven_day.resets_at // "" | @sh) + "\n" +
             "usage_opus=" + (if .seven_day_opus then (.seven_day_opus.utilization // 0 | tostring) else "null" end) + "\n" +
             "usage_sonnet=" + (if .seven_day_sonnet then (.seven_day_sonnet.utilization // 0 | tostring) else "null" end) + "\n" +
-            "usage_extra_enabled=" + (.extra_usage.is_enabled // false | tostring) + "\n" +
-            "usage_extra_limit=" + (.extra_usage.monthly_limit // 0 | tostring) + "\n" +
-            "usage_extra_used=" + (.extra_usage.used_credits // 0 | tostring) + "\n" +
             "usage_ws_cost_cents=" + (.workspace_cost.month_used_cents // 0 | tostring)
         ' "$USAGE_CACHE" > "$_parallel_tmp/usage.sh" 2>/dev/null
     else
-        echo -e "usage_5h=0\nusage_7d=0\nusage_extra_enabled=false\nusage_ws_cost_cents=0" > "$_parallel_tmp/usage.sh"
+        echo -e "usage_5h=0\nusage_7d=0\nusage_ws_cost_cents=0" > "$_parallel_tmp/usage.sh"
     fi
 } &
 
@@ -531,7 +528,6 @@ USAGE_PRIMARY='\033[38;2;251;191;36m'     # Amber icon
 USAGE_LABEL='\033[38;2;217;163;29m'       # Amber label
 USAGE_VALUE='\033[38;2;253;224;71m'       # Yellow-gold values
 USAGE_RESET='\033[38;2;229;229;229m'      # Match Claude output text
-USAGE_EXTRA='\033[38;2;140;90;60m'         # Muted brown for EX
 
 # Line 7: Quote (gold theme)
 QUOTE_PRIMARY='\033[38;2;252;211;77m'
@@ -1133,29 +1129,6 @@ print(f\"clock_5h='{clock_time(r5h)}'\")
 " 2>/dev/null)"
     reset_5h="${reset_5h:-—}"
 
-    # Extra usage display: Max plan overage credits (both monthly_limit and used_credits are in cents)
-    extra_display=""
-    if [ "$usage_extra_enabled" = "true" ]; then
-        extra_limit_dollars=$((${usage_extra_limit:-0} / 100))
-        extra_used_dollars=$((${usage_extra_used%%.*} / 100))
-        extra_used_int=${extra_used_dollars:-0}
-        [ -z "$extra_used_int" ] && extra_used_int=0
-        # Format limit nicely
-        if [ "$extra_limit_dollars" -ge 1000 ]; then
-            extra_limit_fmt="\$$(( extra_limit_dollars / 1000 ))K"
-        else
-            extra_limit_fmt="\$${extra_limit_dollars}"
-        fi
-        extra_display="E:\$${extra_used_int}/${extra_limit_fmt}"
-    fi
-
-    # API workspace cost display — DISABLED: not actionable
-    # ws_cost_cents_int=${usage_ws_cost_cents%%.*}
-    # [ -z "$ws_cost_cents_int" ] && ws_cost_cents_int=0
-    # ws_cost_dollars=$((ws_cost_cents_int / 100))
-    # ws_display="A:\$${ws_cost_dollars}"
-    ws_display=""
-
     # Reset time: just use clock time directly (no countdown, no parens)
     reset_5h_time="${clock_5h:-${reset_5h}}"
 
@@ -1172,12 +1145,10 @@ print(f\"clock_5h='{clock_time(r5h)}'\")
         mini)
             usage_plain="USE: ${usage_5h_int}% │ ${reset_5h_time}"
             usage_fmt="🔋${usage_5h_color}${usage_5h_int}%%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}"
-            [ -n "$extra_display" ] && usage_fmt="${usage_fmt} ${SLATE_600}│${RESET} ${USAGE_EXTRA}${extra_display}${RESET}" && usage_plain="${usage_plain} │ ${extra_display}"
             ;;
         normal)
             usage_plain="USE: ${usage_5h_int}% │ ${reset_5h_time}"
             usage_fmt="🔋${usage_5h_color}${usage_5h_int}%%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}"
-            [ -n "$extra_display" ] && usage_fmt="${usage_fmt} ${SLATE_600}│${RESET} ${USAGE_EXTRA}${extra_display}${RESET}" && usage_plain="${usage_plain} │ ${extra_display}"
             ;;
     esac
 

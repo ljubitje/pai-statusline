@@ -17,7 +17,6 @@ Dense 2-line personal statusline for [PAI](https://github.com/danielmiessler/pai
 | Context | 🧮 | `▅▅▅▅▁▁▁▁▁▁ 42%` | Gradient context bar + percentage |
 | Usage | 🔋 | `65%` | 5-hour utilization |
 | | 🔄 | `15:30` | Usage reset time (local clock) |
-| | E: | `$2/$100` | Extra credits used/limit |
 | Learning | ⭐ | `12` | Total ratings count |
 | | 🧠 | `7.1` | All-time average + sparkline |
 | | ✨ | `8 (exp)` | Latest rating + source |
