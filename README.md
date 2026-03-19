@@ -4,13 +4,24 @@ Dense 2-line personal statusline for [PAI](https://github.com/danielmiessler/pai
 
 ## What it shows
 
-| Section | Info |
-|---------|------|
-| **Header** | PAI version, Claude Code version, Claude Code service status, session time, directory, git tree state |
-| **Git** | Stash count, ahead/behind remote |
-| **Learning** | Rating sparklines, averages (15m/1h/1d/1w/1m/all-time), trend direction |
-| **Context** | Gradient progress bar, raw percentage, compaction threshold scaling |
-| **Usage** | 5-hour utilization %, reset time, extra credits |
+| Section | Symbol | Example | Info |
+|---------|--------|---------|------|
+| Header | PAI | `4.0.3` | PAI version |
+| | CC | `1.0.32` | Claude Code version |
+| | ⬤ | `ok` | Claude Code service status |
+| | ⏳ | `1h23m` | Session wall-clock time |
+| | 📍 | `myproject` | Current directory |
+| | 🌳 | `clean` | Git tree state (clean/staged/unstaged/untracked) |
+| Git | Stash: | `2` | Git stash count |
+| | Sync: | `↑2↓1` | Commits ahead/behind remote |
+| Context | 🧮 | `▅▅▅▅▁▁▁▁▁▁ 42%` | Gradient context bar + percentage |
+| Usage | 🔋 | `65%` | 5-hour utilization |
+| | 🔄 | `15:30` | Usage reset time (local clock) |
+| | E: | `$2/$100` | Extra credits used/limit |
+| Learning | ⭐ | `12` | Total ratings count |
+| | 🧠 | `7.1` | All-time average + sparkline |
+| | ✨ | `8 (exp)` | Latest rating + source |
+| | 🔎 | `3` | Research count |
 
 ## Responsive modes
 
