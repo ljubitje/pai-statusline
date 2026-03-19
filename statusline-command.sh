@@ -42,11 +42,9 @@ USAGE_CACHE="$PAI_DIR/MEMORY/STATE/usage-cache.json"
 # Cache TTL in seconds
 # LOCATION_CACHE_TTL=3600  # 1 hour (IP rarely changes) — DISABLED: external API
 # WEATHER_CACHE_TTL=900    # 15 minutes — DISABLED: external API
-COUNTS_CACHE_TTL=30      # 30 seconds (file counts rarely change mid-session)
 USAGE_CACHE_TTL=60       # 60 seconds (API recommends ≤1 poll/minute)
 
 # Additional cache files
-COUNTS_CACHE="$PAI_DIR/MEMORY/STATE/counts-cache.sh"
 STATUS_CACHE="$PAI_DIR/MEMORY/STATE/status-claude.json"
 STATUS_CACHE_TTL=30
 
@@ -65,12 +63,21 @@ get_mtime() {
 
 input=$(cat)
 
-# Extract all settings in a single jq call (was 4 separate calls)
+# Extract all settings + counts in a single jq call (was 4 separate calls, then 2)
 eval "$(jq -r '
   "DA_NAME=" + (.daidentity.name // .daidentity.displayName // .env.DA // "Assistant" | @sh) + "\n" +
   "USER_TZ=" + (.principal.timezone // "UTC" | @sh) + "\n" +
   "PAI_VERSION=" + (.pai.version // "—" | @sh) + "\n" +
-  "COMPACTION_THRESHOLD=" + (.contextDisplay.compactionThreshold // 100 | tostring)
+  "COMPACTION_THRESHOLD=" + (.contextDisplay.compactionThreshold // 100 | tostring) + "\n" +
+  "skills_count=" + (.counts.skills // 0 | tostring) + "\n" +
+  "workflows_count=" + (.counts.workflows // 0 | tostring) + "\n" +
+  "hooks_count=" + (.counts.hooks // 0 | tostring) + "\n" +
+  "learnings_count=" + (.counts.signals // 0 | tostring) + "\n" +
+  "files_count=" + (.counts.files // 0 | tostring) + "\n" +
+  "work_count=" + (.counts.work // 0 | tostring) + "\n" +
+  "sessions_count=" + (.counts.sessions // 0 | tostring) + "\n" +
+  "research_count=" + (.counts.research // 0 | tostring) + "\n" +
+  "ratings_count=" + (.counts.ratings // 0 | tostring)
 ' "$SETTINGS_FILE" 2>/dev/null)"
 DA_NAME="${DA_NAME:-Assistant}"
 USER_TZ="${USER_TZ:-UTC}"
@@ -179,9 +186,8 @@ fi
 _parallel_tmp="/tmp/pai-parallel-$$"
 mkdir -p "$_parallel_tmp"
 
-# Single background subshell for git + counts (the only ops that need forking)
+# Background subshell for git only (counts now extracted in settings jq above)
 {
-    # Git — index-only ops
     if git rev-parse --git-dir > /dev/null 2>&1; then
         _branch=$(git branch --show-current 2>/dev/null)
         [ -z "$_branch" ] && _branch="detached"
@@ -190,29 +196,6 @@ mkdir -p "$_parallel_tmp"
     else
         echo "is_git_repo=false" > "$_parallel_tmp/git.sh"
     fi
-
-    # Counts from settings.json
-    jq -r '
-        "skills_count=" + (.counts.skills // 0 | tostring) + "\n" +
-        "workflows_count=" + (.counts.workflows // 0 | tostring) + "\n" +
-        "hooks_count=" + (.counts.hooks // 0 | tostring) + "\n" +
-        "learnings_count=" + (.counts.signals // 0 | tostring) + "\n" +
-        "files_count=" + (.counts.files // 0 | tostring) + "\n" +
-        "work_count=" + (.counts.work // 0 | tostring) + "\n" +
-        "sessions_count=" + (.counts.sessions // 0 | tostring) + "\n" +
-        "research_count=" + (.counts.research // 0 | tostring) + "\n" +
-        "ratings_count=" + (.counts.ratings // 0 | tostring)
-    ' "$SETTINGS_FILE" > "$_parallel_tmp/counts.sh" 2>/dev/null || cat > "$_parallel_tmp/counts.sh" << 'COUNTSEOF'
-skills_count=0
-workflows_count=0
-hooks_count=0
-learnings_count=0
-files_count=0
-work_count=0
-sessions_count=0
-research_count=0
-ratings_count=0
-COUNTSEOF
 } &
 
 # Usage cache — direct source from pre-built .sh (updated by fire-and-forget block)
@@ -232,12 +215,11 @@ else
     claude_status_indicator='unknown'; claude_status_desc='no cache'
 fi
 
-# Wait for git + counts subshell only
+# Wait for git subshell
 wait
 
-# Source parallel results
+# Source git results
 [ -f "$_parallel_tmp/git.sh" ] && source "$_parallel_tmp/git.sh"
-[ -f "$_parallel_tmp/counts.sh" ] && source "$_parallel_tmp/counts.sh"
 rm -rf "$_parallel_tmp" 2>/dev/null
 
 # Pre-load learning cache (used by LEARNING section)
@@ -490,14 +472,17 @@ format_time_until() {
 }
 
 # Convert ISO 8601 timestamp to local clock time (e.g., "15:30" or "15h")
+# Single date fork instead of 2
 format_clock_time() {
     local ts="$1"
     [ -z "$ts" ] && return
-    local minute=$(TZ="$USER_TZ" date -d "$ts" +"%M" 2>/dev/null) || return
-    if [ "$minute" = "00" ]; then
-        TZ="$USER_TZ" date -d "$ts" +"%-Hh" 2>/dev/null
+    local hm
+    hm=$(TZ="$USER_TZ" date -d "$ts" +"%-H %M" 2>/dev/null) || return
+    local h="${hm% *}" m="${hm#* }"
+    if [ "$m" = "00" ]; then
+        echo "${h}h"
     else
-        TZ="$USER_TZ" date -d "$ts" +"%-H:%M" 2>/dev/null
+        echo "${h}:${m}"
     fi
 }
 
@@ -881,13 +866,18 @@ usage_5h_int=${usage_5h%%.*}
 if [ "$usage_5h_int" -gt 0 ] || [ -f "$USAGE_CACHE" ]; then
     usage_5h_color=$(get_usage_color "$usage_5h_int")
 
-    # Compute 5h reset time using GNU date (no python3)
-    _reset_epoch=$(parse_iso_epoch "$usage_5h_reset")
-    reset_5h=$(format_time_until "$_reset_epoch")
-    clock_5h=$(format_clock_time "$usage_5h_reset")
-
-    # Reset time: just use clock time directly (no countdown, no parens)
-    reset_5h_time="${clock_5h:-${reset_5h}}"
+    # Reset time: pre-computed in .sh cache (no date forks during render)
+    # Falls back to live computation if cache didn't include these fields
+    if [ -n "$usage_5h_clock" ]; then
+        reset_5h_time="$usage_5h_clock"
+    elif [ -n "$usage_5h_reset" ]; then
+        _reset_epoch=$(parse_iso_epoch "$usage_5h_reset")
+        reset_5h=$(format_time_until "$_reset_epoch")
+        clock_5h=$(format_clock_time "$usage_5h_reset")
+        reset_5h_time="${clock_5h:-${reset_5h}}"
+    else
+        reset_5h_time="—"
+    fi
 
     # Build usage suffix (plain text for length calculation)
     case "$MODE" in
@@ -1069,6 +1059,16 @@ if ! [ -f "$_bg_lock" ] || [ $(($(date +%s) - $(get_mtime "$_bg_lock"))) -gt 10 
                         "usage_sonnet=" + (if .seven_day_sonnet then (.seven_day_sonnet.utilization // 0 | tostring) else "null" end) + "\n" +
                         "usage_ws_cost_cents=" + (.workspace_cost.month_used_cents // 0 | tostring)
                     ' > "$PAI_DIR/MEMORY/STATE/usage-cache.sh" 2>/dev/null
+                    # Pre-compute clock time (saves 3 date forks on next render)
+                    _5h_reset_ts=$(echo "$_usage_json" | jq -r '.five_hour.resets_at // ""' 2>/dev/null)
+                    if [ -n "$_5h_reset_ts" ]; then
+                        _hm=$(TZ="$USER_TZ" date -d "$_5h_reset_ts" +"%-H %M" 2>/dev/null)
+                        if [ -n "$_hm" ]; then
+                            _h="${_hm% *}" _m="${_hm#* }"
+                            if [ "$_m" = "00" ]; then _clock="${_h}h"; else _clock="${_h}:${_m}"; fi
+                            echo "usage_5h_clock='$_clock'" >> "$PAI_DIR/MEMORY/STATE/usage-cache.sh"
+                        fi
+                    fi
                 fi
             fi
         fi
