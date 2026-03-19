@@ -26,13 +26,13 @@ Dense 2-line personal statusline for [PAI](https://github.com/danielmiessler/pai
 The statusline adapts to your terminal width, picking the largest statusline that fits:
 
 **full**
-<img src="tier-full.png" alt="full density" width="520">
+<img src="tier-full.png" alt="full density">
 
 **dense**
-<img src="tier-dense.png" alt="dense density" width="520">
+<img src="tier-dense.png" alt="dense density">
 
 **ultradense**
-<img src="tier-ultradense.png" alt="ultradense density" width="520">
+<img src="tier-ultradense.png" alt="ultradense density">
 
 ## Installation via PAI (recommended)
 
