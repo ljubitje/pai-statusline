@@ -40,13 +40,11 @@ input=$(cat)
 
 # Extract all settings + counts in a single jq call (was 4 separate calls, then 2)
 eval "$(jq -r '
-  "DA_NAME=" + (.daidentity.name // .daidentity.displayName // .env.DA // "Assistant" | @sh) + "\n" +
   "USER_TZ=" + (.principal.timezone // "UTC" | @sh) + "\n" +
   "PAI_VERSION=" + (.pai.version // "—" | @sh) + "\n" +
   "COMPACTION_THRESHOLD=" + (.contextDisplay.compactionThreshold // 100 | tostring) + "\n" +
   "ratings_count=" + (.counts.ratings // 0 | tostring)
 ' "$SETTINGS_FILE" 2>/dev/null)"
-DA_NAME="${DA_NAME:-Assistant}"
 USER_TZ="${USER_TZ:-UTC}"
 PAI_VERSION="${PAI_VERSION:-—}"
 COMPACTION_THRESHOLD="${COMPACTION_THRESHOLD:-100}"

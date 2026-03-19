@@ -16,14 +16,22 @@ Dense 2-line personal statusline for [PAI](https://github.com/danielmiessler/pai
 | | 🌳 | <span style="color:rgb(74,222,128)">clean</span> | Git tree state |
 | Usage | 🧮 | <span style="color:rgb(70,175,95)">▅▅▅▅</span><span style="color:rgb(150,190,40)">▅▅</span><span style="color:rgb(255,193,7)">▅</span><span style="color:rgb(99,99,99)">▁▁▁</span> <span style="color:rgb(255,193,7)">72%</span> | Context bar + % |
 | | 🔋 | <span style="color:rgb(150,190,40)">65%</span> | 5-hour utilization % |
-| | 🔄 | 15:30 | Reset time |
-| Learning | ⭐ | 12 | Ratings count |
-| | 🧠 | <span style="color:rgb(150,190,40)">7.1</span> <span style="color:rgb(150,190,40)">▄</span><span style="color:rgb(255,193,7)">▃</span><span style="color:rgb(150,190,40)">▄</span><span style="color:rgb(70,175,95)">▅</span><span style="color:rgb(255,193,7)">▃</span><span style="color:rgb(150,190,40)">▄▄</span><span style="color:rgb(255,193,7)">▃</span><span style="color:rgb(70,175,95)">▅</span><span style="color:rgb(150,190,40)">▄</span> | Average rating + ratings bar (last 10) |
+| | 🔄 | 19h | Reset time (clock hour) |
+| Learning | 🧠 | <span style="color:rgb(150,190,40)">7.1</span> <span style="color:rgb(150,190,40)">▄</span><span style="color:rgb(255,193,7)">▃</span><span style="color:rgb(150,190,40)">▄</span><span style="color:rgb(70,175,95)">▅</span><span style="color:rgb(255,193,7)">▃</span><span style="color:rgb(150,190,40)">▄▄</span><span style="color:rgb(255,193,7)">▃</span><span style="color:rgb(70,175,95)">▅</span><span style="color:rgb(150,190,40)">▄</span> | Average rating + ratings bar (last 10) |
 | | ✨ | <span style="color:rgb(150,190,40)">8</span> (exp) | Last rating |
+| | ⭐ | 12 | Ratings count |
 
-## Installation
+## Density tiers
 
-### Via PAI (recommended)
+Adapts to terminal width automatically, picking the largest tier that fits:
+
+| Tier | Line 1 | Line 2 |
+|------|--------|--------|
+| **full** | `PAI 4.0.3 CC 2.1.70 ⬤ ok │ ⏳1h23m 📍myproject 🌳clean` | `🧮▅▅▅▅▅▅▅▁▁▁ 72% 🔋65% 🔄19h │ 🧠7.1 ▄▃▄▅▃▄▄▃▅▄ ✨8 (exp) ⭐12` |
+| **dense** | `PAI/CC ⬤ ok │ ⏳1h23m 🌳clean` | `🧮72% 🔋65% 🔄19h │ 🧠7.1 ✨8 ⭐12` |
+| **ultradense** | `CC ⬤ ok │ 🌳clean` | `🧮72% 🔋65% │ 🧠7.1` |
+
+## Installation via PAI (recommended)
 
 In any PAI session, say:
 
@@ -31,7 +39,7 @@ In any PAI session, say:
 
 PAI will clone the repo, read the setup instructions, and handle the rest.
 
-### Manual
+## Installation via manual labour
 
 1. Copy the script:
 
@@ -51,7 +59,7 @@ chmod +x $PAI_DIR/statusline-command.sh
 }
 ```
 
-### Update
+## Update
 
 In any PAI session, say:
 
@@ -65,7 +73,6 @@ The statusline reads configuration from `settings.json`:
 |-----|---------|-------------|
 | `contextDisplay.compactionThreshold` | `100` | Scale context bar so this % = 100%. Set to `62` if your compaction triggers at 62%. |
 | `principal.timezone` | `UTC` | Your timezone for reset time display (e.g., `America/New_York`) |
-| `daidentity.name` | `Assistant` | Your AI assistant's display name |
 | `pai.version` | `--` | PAI version string |
 | `counts.ratings` | `0` | Total ratings count (populated by PAI stop hooks) |
 
