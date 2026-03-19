@@ -498,7 +498,7 @@ if [ -f "$RATINGS_FILE" ] && [ -s "$RATINGS_FILE" ]; then
         ] | join("");
 
       # Last 16 ratings sparkline, padded with underscores for empty slots
-      (16 as $cap |
+      (12 as $cap |
         (if length > $cap then .[-$cap:] else . end) as $recent |
         [range($cap - ($recent | length)) | null] + $recent |
         map(if . == null then "\u001b[38;2;\($sc_empty | gsub(",";";"))m▁\u001b[0m" else .rating | to_bar end) |
