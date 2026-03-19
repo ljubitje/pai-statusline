@@ -259,40 +259,7 @@ COUNTSEOF
 } &
 
 {
-    # 5. Usage data — refresh from Anthropic API if cache is stale
-    cache_age=999999
-    [ -f "$USAGE_CACHE" ] && cache_age=$(($(date +%s) - $(get_mtime "$USAGE_CACHE")))
-
-    if [ "$cache_age" -gt "$USAGE_CACHE_TTL" ]; then
-        # Extract OAuth token — macOS Keychain or Linux credentials file
-        if [ "$(uname -s)" = "Darwin" ]; then
-            cred_json=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null)
-        else
-            cred_json=$(cat "${HOME}/.claude/.credentials.json" 2>/dev/null)
-        fi
-        token=$(echo "$cred_json" | jq -r '.claudeAiOauth.accessToken // ""' 2>/dev/null)
-
-        if [ -n "$token" ]; then
-            usage_json=$(curl -s --max-time 3 \
-                -H "Authorization: Bearer $token" \
-                -H "Content-Type: application/json" \
-                -H "anthropic-beta: oauth-2025-04-20" \
-                "https://api.anthropic.com/api/oauth/usage" 2>/dev/null)
-
-            if [ -n "$usage_json" ] && echo "$usage_json" | jq -e '.five_hour' >/dev/null 2>&1; then
-                # Preserve workspace_cost from existing cache (admin API is slow, stop hook handles it)
-                if [ -f "$USAGE_CACHE" ]; then
-                    ws_cost=$(jq -r '.workspace_cost // empty' "$USAGE_CACHE" 2>/dev/null)
-                    if [ -n "$ws_cost" ] && [ "$ws_cost" != "null" ]; then
-                        usage_json=$(echo "$usage_json" | jq --argjson ws "$ws_cost" '. + {workspace_cost: $ws}' 2>/dev/null || echo "$usage_json")
-                    fi
-                fi
-                echo "$usage_json" | jq '.' > "$USAGE_CACHE" 2>/dev/null
-            fi
-        fi
-    fi
-
-    # Read cache (freshly updated or existing)
+    # 5. Usage data — read cache immediately, fire-and-forget refresh if stale
     if [ -f "$USAGE_CACHE" ]; then
         jq -r '
             "usage_5h=" + (.five_hour.utilization // 0 | tostring) + "\n" +
@@ -308,29 +275,8 @@ COUNTSEOF
     fi
 } &
 
-# 7. Claude service status prefetch
 {
-    _now=$(date +%s)
-    _status_mtime=$(get_mtime "$STATUS_CACHE" 2>/dev/null)
-    _status_age=$((_now - _status_mtime))
-    _status_err=""
-    if [ "$_status_age" -gt "$STATUS_CACHE_TTL" ]; then
-        _status_http=$(curl -s -o /tmp/_pai_status_body -w '%{http_code}' --max-time 3 "https://status.claude.com/api/v2/status.json" 2>/dev/null)
-        _status_curl=$?
-        if [ "$_status_curl" -ne 0 ]; then
-            _status_err="curl:${_status_curl}"
-        elif [ "$_status_http" -ne 200 ]; then
-            _status_err="http:${_status_http}"
-        else
-            _status_json=$(cat /tmp/_pai_status_body)
-            if echo "$_status_json" | jq -e '.status.indicator' >/dev/null 2>&1; then
-                echo "$_status_json" > "$STATUS_CACHE"
-            else
-                _status_err="bad json"
-            fi
-        fi
-        rm -f /tmp/_pai_status_body
-    fi
+    # 6. Claude service status — read cache immediately
     if [ -f "$STATUS_CACHE" ] && [ -s "$STATUS_CACHE" ]; then
         _ind=$(jq -r '.status.indicator // "unknown"' "$STATUS_CACHE" 2>/dev/null)
         _desc=$(jq -r '.status.description // "fetch failed" | ascii_downcase | if . == "all systems operational" then "ok" else . end' "$STATUS_CACHE" 2>/dev/null)
@@ -338,23 +284,15 @@ COUNTSEOF
         echo "claude_status_desc='${_desc}'" >> "$_parallel_tmp/status.sh"
     else
         echo "claude_status_indicator='unknown'" > "$_parallel_tmp/status.sh"
-        echo "claude_status_desc='${_status_err:-no cache}'" >> "$_parallel_tmp/status.sh"
+        echo "claude_status_desc='no cache'" >> "$_parallel_tmp/status.sh"
     fi
 } &
 
-# DISABLED: external API (zenquotes.io)
-# {
-#     # 6. Quote prefetch (was serial at the end — now parallel)
-#     ...
-# } &
-
-# --- PARALLEL BLOCK END - wait for all to complete ---
+# --- PARALLEL BLOCK END - wait for all to complete (no network ops!) ---
 wait
 
 # Source all parallel results
 [ -f "$_parallel_tmp/git.sh" ] && source "$_parallel_tmp/git.sh"
-# [ -f "$_parallel_tmp/location.sh" ] && source "$_parallel_tmp/location.sh"  # DISABLED
-# [ -f "$_parallel_tmp/weather.sh" ] && source "$_parallel_tmp/weather.sh"  # DISABLED
 [ -f "$_parallel_tmp/counts.sh" ] && source "$_parallel_tmp/counts.sh"
 [ -f "$_parallel_tmp/usage.sh" ] && source "$_parallel_tmp/usage.sh"
 [ -f "$_parallel_tmp/status.sh" ] && source "$_parallel_tmp/status.sh"
@@ -1160,4 +1098,57 @@ if false && [ "$MODE" = "normal" ]; then
             fi
         fi
     fi
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FIRE-AND-FORGET: Background cache refreshes (never block render)
+# ─────────────────────────────────────────────────────────────────────────────
+# All output is already printed above. These update cache files for the NEXT
+# render. Lock file prevents overlapping fetches from concurrent calls.
+
+_bg_lock="/tmp/pai-bg-fetch.lock"
+if ! [ -f "$_bg_lock" ] || [ $(($(date +%s) - $(get_mtime "$_bg_lock"))) -gt 10 ]; then
+    touch "$_bg_lock" 2>/dev/null
+    (
+        # Usage API refresh
+        _usage_age=999999
+        [ -f "$USAGE_CACHE" ] && _usage_age=$(($(date +%s) - $(get_mtime "$USAGE_CACHE")))
+        if [ "$_usage_age" -gt "$USAGE_CACHE_TTL" ]; then
+            if [ "$(uname -s)" = "Darwin" ]; then
+                _cred_json=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null)
+            else
+                _cred_json=$(cat "${HOME}/.claude/.credentials.json" 2>/dev/null)
+            fi
+            _token=$(echo "$_cred_json" | jq -r '.claudeAiOauth.accessToken // ""' 2>/dev/null)
+            if [ -n "$_token" ]; then
+                _usage_json=$(curl -s --max-time 3 \
+                    -H "Authorization: Bearer $_token" \
+                    -H "Content-Type: application/json" \
+                    -H "anthropic-beta: oauth-2025-04-20" \
+                    "https://api.anthropic.com/api/oauth/usage" 2>/dev/null)
+                if [ -n "$_usage_json" ] && echo "$_usage_json" | jq -e '.five_hour' >/dev/null 2>&1; then
+                    if [ -f "$USAGE_CACHE" ]; then
+                        _ws_cost=$(jq -r '.workspace_cost // empty' "$USAGE_CACHE" 2>/dev/null)
+                        if [ -n "$_ws_cost" ] && [ "$_ws_cost" != "null" ]; then
+                            _usage_json=$(echo "$_usage_json" | jq --argjson ws "$_ws_cost" '. + {workspace_cost: $ws}' 2>/dev/null || echo "$_usage_json")
+                        fi
+                    fi
+                    echo "$_usage_json" | jq '.' > "$USAGE_CACHE" 2>/dev/null
+                fi
+            fi
+        fi
+
+        # Claude service status refresh
+        _status_age=999999
+        [ -f "$STATUS_CACHE" ] && _status_age=$(($(date +%s) - $(get_mtime "$STATUS_CACHE")))
+        if [ "$_status_age" -gt "$STATUS_CACHE_TTL" ]; then
+            _status_body=$(curl -s --max-time 3 "https://status.claude.com/api/v2/status.json" 2>/dev/null)
+            if [ -n "$_status_body" ] && echo "$_status_body" | jq -e '.status.indicator' >/dev/null 2>&1; then
+                echo "$_status_body" > "$STATUS_CACHE"
+            fi
+        fi
+
+        rm -f "$_bg_lock" 2>/dev/null
+    ) &
+    disown 2>/dev/null
 fi
