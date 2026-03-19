@@ -20,7 +20,7 @@ When a user asks you to "install the statusline", "set up the statusline", or si
    - Confirm the script exists and is executable: `ls -la ~/.claude/statusline-command.sh`
    - Confirm settings.json has the statusLine entry: `jq '.statusLine' ~/.claude/settings.json`
 
-4. **Tell the user** to restart Claude Code to see the statusline.
+4. **Tell the user** to restart PAI to see the statusline.
 
 ## Important
 
