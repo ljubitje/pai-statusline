@@ -501,7 +501,17 @@ CACHE_EOF
         printf -v learn_full '%b' "🧠${ALL_COLOR}${all_avg}${RESET} ${all_sparkline} ✨${LATEST_COLOR}${latest}${RESET} ${SLATE_300}(${src_label})${RESET} ⭐${SLATE_300}${ratings_count}${RESET}"
         printf -v learn_dense '%b' "🧠${ALL_COLOR}${all_avg}${RESET} ✨${LATEST_COLOR}${latest}${RESET} ⭐${SLATE_300}${ratings_count}${RESET}"
         printf -v learn_ultra '%b' "🧠${ALL_COLOR}${all_avg}${RESET}"
+    else
+        # No ratings yet — show placeholder
+        printf -v learn_full '%b' "🧠${SLATE_400}?${RESET} ${SLATE_600}no ratings${RESET} ✨${SLATE_400}7${RESET} ⭐${SLATE_300}0${RESET}"
+        printf -v learn_dense '%b' "🧠${SLATE_400}?${RESET} ✨${SLATE_400}7${RESET} ⭐${SLATE_300}0${RESET}"
+        printf -v learn_ultra '%b' "🧠${SLATE_400}?${RESET}"
     fi
+else
+    # No ratings file — show placeholder
+    printf -v learn_full '%b' "🧠${SLATE_400}?${RESET} ${SLATE_600}no ratings${RESET} ✨${SLATE_400}7${RESET} ⭐${SLATE_300}0${RESET}"
+    printf -v learn_dense '%b' "🧠${SLATE_400}?${RESET} ✨${SLATE_400}7${RESET} ⭐${SLATE_300}0${RESET}"
+    printf -v learn_ultra '%b' "🧠${SLATE_400}?${RESET}"
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
