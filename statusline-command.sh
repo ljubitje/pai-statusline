@@ -155,12 +155,14 @@ dir_name=$(basename "$current_dir" 2>/dev/null || echo ".")
 # SESSION WALL-CLOCK TIME
 # ─────────────────────────────────────────────────────────────────────────────
 # Write start timestamp on first render, compute elapsed on each subsequent render.
+# Cache epoch once — reused throughout the script to avoid repeated date forks
+_NOW=$(date +%s)
 SESSION_START_FILE="/tmp/pai-session-start-${session_id:-$$}"
 if [ ! -f "$SESSION_START_FILE" ]; then
-    date +%s > "$SESSION_START_FILE"
+    echo "$_NOW" > "$SESSION_START_FILE"
 fi
 _session_start=$(cat "$SESSION_START_FILE")
-_session_now=$(date +%s)
+_session_now=$_NOW
 _session_elapsed=$((_session_now - _session_start))
 _sess_h=$((_session_elapsed / 3600))
 _sess_m=$((_session_elapsed % 3600 / 60))
@@ -171,131 +173,71 @@ else
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PARALLEL PREFETCH - Launch ALL expensive operations immediately
+# PREFETCH - Single subshell for all I/O, cache reads are direct source
 # ─────────────────────────────────────────────────────────────────────────────
-# This section launches everything in parallel BEFORE any sequential work.
-# Results are collected via temp files and sourced later.
 
 _parallel_tmp="/tmp/pai-parallel-$$"
 mkdir -p "$_parallel_tmp"
 
-# --- PARALLEL BLOCK START ---
+# Single background subshell for git + counts (the only ops that need forking)
 {
-    # 1. Git — FAST INDEX-ONLY ops (<50ms total, no working tree scan)
-    #    No git status, no git diff, no file counts. Those scan 76K+ tracked files = 4-7s.
+    # Git — index-only ops
     if git rev-parse --git-dir > /dev/null 2>&1; then
-        branch=$(git branch --show-current 2>/dev/null)
-        [ -z "$branch" ] && branch="detached"
-        last_commit_epoch=$(git log -1 --format='%ct' 2>/dev/null)
-
-        cat > "$_parallel_tmp/git.sh" << GITEOF
-branch='$branch'
-last_commit_epoch=${last_commit_epoch:-0}
-is_git_repo=true
-GITEOF
+        _branch=$(git branch --show-current 2>/dev/null)
+        [ -z "$_branch" ] && _branch="detached"
+        _last_epoch=$(git log -1 --format='%ct' 2>/dev/null)
+        printf "branch='%s'\nlast_commit_epoch=%s\nis_git_repo=true\n" "$_branch" "${_last_epoch:-0}" > "$_parallel_tmp/git.sh"
     else
         echo "is_git_repo=false" > "$_parallel_tmp/git.sh"
     fi
-} &
 
-# DISABLED: external API (ip-api.com)
-# {
-#     # 2. Location fetch (with caching)
-#     cache_age=999999
-#     [ -f "$LOCATION_CACHE" ] && cache_age=$(($(date +%s) - $(get_mtime "$LOCATION_CACHE")))
-#
-#     if [ "$cache_age" -gt "$LOCATION_CACHE_TTL" ]; then
-#         loc_data=$(curl -s --max-time 2 "http://ip-api.com/json/?fields=city,regionName,country,lat,lon" 2>/dev/null)
-#         if [ -n "$loc_data" ] && echo "$loc_data" | jq -e '.city' >/dev/null 2>&1; then
-#             echo "$loc_data" > "$LOCATION_CACHE"
-#         fi
-#     fi
-#
-#     if [ -f "$LOCATION_CACHE" ]; then
-#         jq -r '"location_city=" + (.city | @sh) + "\nlocation_state=" + (.regionName | @sh)' "$LOCATION_CACHE" > "$_parallel_tmp/location.sh" 2>/dev/null
-#     else
-#         echo -e "location_city='Unknown'\nlocation_state=''" > "$_parallel_tmp/location.sh"
-#     fi
-# } &
-location_city=""
-location_state=""
-
-# DISABLED: external API (open-meteo.com)
-# {
-#     # 3. Weather fetch (with caching)
-#     ...
-# } &
-weather_str=""
-
-{
-    # 4. All counts from settings.json (updated by StopOrchestrator → UpdateCounts)
-    # Zero filesystem scanning — stop hook keeps settings.json fresh
-    if jq -e '.counts' "$SETTINGS_FILE" >/dev/null 2>&1; then
-        jq -r '
-            "skills_count=" + (.counts.skills // 0 | tostring) + "\n" +
-            "workflows_count=" + (.counts.workflows // 0 | tostring) + "\n" +
-            "hooks_count=" + (.counts.hooks // 0 | tostring) + "\n" +
-            "learnings_count=" + (.counts.signals // 0 | tostring) + "\n" +
-            "files_count=" + (.counts.files // 0 | tostring) + "\n" +
-            "work_count=" + (.counts.work // 0 | tostring) + "\n" +
-            "sessions_count=" + (.counts.sessions // 0 | tostring) + "\n" +
-            "research_count=" + (.counts.research // 0 | tostring) + "\n" +
-            "ratings_count=" + (.counts.ratings // 0 | tostring)
-        ' "$SETTINGS_FILE" > "$_parallel_tmp/counts.sh" 2>/dev/null
-    else
-        # First run before any stop hook has fired — seed with defaults
-        cat > "$_parallel_tmp/counts.sh" << COUNTSEOF
-skills_count=65
-workflows_count=339
-hooks_count=18
-learnings_count=3000
-files_count=172
+    # Counts from settings.json
+    jq -r '
+        "skills_count=" + (.counts.skills // 0 | tostring) + "\n" +
+        "workflows_count=" + (.counts.workflows // 0 | tostring) + "\n" +
+        "hooks_count=" + (.counts.hooks // 0 | tostring) + "\n" +
+        "learnings_count=" + (.counts.signals // 0 | tostring) + "\n" +
+        "files_count=" + (.counts.files // 0 | tostring) + "\n" +
+        "work_count=" + (.counts.work // 0 | tostring) + "\n" +
+        "sessions_count=" + (.counts.sessions // 0 | tostring) + "\n" +
+        "research_count=" + (.counts.research // 0 | tostring) + "\n" +
+        "ratings_count=" + (.counts.ratings // 0 | tostring)
+    ' "$SETTINGS_FILE" > "$_parallel_tmp/counts.sh" 2>/dev/null || cat > "$_parallel_tmp/counts.sh" << 'COUNTSEOF'
+skills_count=0
+workflows_count=0
+hooks_count=0
+learnings_count=0
+files_count=0
 work_count=0
 sessions_count=0
 research_count=0
 ratings_count=0
 COUNTSEOF
-    fi
 } &
 
-{
-    # 5. Usage data — read cache immediately, fire-and-forget refresh if stale
-    if [ -f "$USAGE_CACHE" ]; then
-        jq -r '
-            "usage_5h=" + (.five_hour.utilization // 0 | tostring) + "\n" +
-            "usage_5h_reset=" + (.five_hour.resets_at // "" | @sh) + "\n" +
-            "usage_7d=" + (.seven_day.utilization // 0 | tostring) + "\n" +
-            "usage_7d_reset=" + (.seven_day.resets_at // "" | @sh) + "\n" +
-            "usage_opus=" + (if .seven_day_opus then (.seven_day_opus.utilization // 0 | tostring) else "null" end) + "\n" +
-            "usage_sonnet=" + (if .seven_day_sonnet then (.seven_day_sonnet.utilization // 0 | tostring) else "null" end) + "\n" +
-            "usage_ws_cost_cents=" + (.workspace_cost.month_used_cents // 0 | tostring)
-        ' "$USAGE_CACHE" > "$_parallel_tmp/usage.sh" 2>/dev/null
-    else
-        echo -e "usage_5h=0\nusage_7d=0\nusage_ws_cost_cents=0" > "$_parallel_tmp/usage.sh"
-    fi
-} &
+# Usage cache — direct source from pre-built .sh (updated by fire-and-forget block)
+USAGE_CACHE_SH="$PAI_DIR/MEMORY/STATE/usage-cache.sh"
+if [ -f "$USAGE_CACHE_SH" ]; then
+    source "$USAGE_CACHE_SH"
+else
+    usage_5h=0; usage_7d=0; usage_5h_reset=""; usage_7d_reset=""
+    usage_opus="null"; usage_sonnet="null"; usage_ws_cost_cents=0
+fi
 
-{
-    # 6. Claude service status — read cache immediately
-    if [ -f "$STATUS_CACHE" ] && [ -s "$STATUS_CACHE" ]; then
-        _ind=$(jq -r '.status.indicator // "unknown"' "$STATUS_CACHE" 2>/dev/null)
-        _desc=$(jq -r '.status.description // "fetch failed" | ascii_downcase | if . == "all systems operational" then "ok" else . end' "$STATUS_CACHE" 2>/dev/null)
-        echo "claude_status_indicator='${_ind}'" > "$_parallel_tmp/status.sh"
-        echo "claude_status_desc='${_desc}'" >> "$_parallel_tmp/status.sh"
-    else
-        echo "claude_status_indicator='unknown'" > "$_parallel_tmp/status.sh"
-        echo "claude_status_desc='no cache'" >> "$_parallel_tmp/status.sh"
-    fi
-} &
+# Status cache — direct source from pre-built .sh (updated by fire-and-forget block)
+STATUS_CACHE_SH="$PAI_DIR/MEMORY/STATE/status-cache.sh"
+if [ -f "$STATUS_CACHE_SH" ]; then
+    source "$STATUS_CACHE_SH"
+else
+    claude_status_indicator='unknown'; claude_status_desc='no cache'
+fi
 
-# --- PARALLEL BLOCK END - wait for all to complete (no network ops!) ---
+# Wait for git + counts subshell only
 wait
 
-# Source all parallel results
+# Source parallel results
 [ -f "$_parallel_tmp/git.sh" ] && source "$_parallel_tmp/git.sh"
 [ -f "$_parallel_tmp/counts.sh" ] && source "$_parallel_tmp/counts.sh"
-[ -f "$_parallel_tmp/usage.sh" ] && source "$_parallel_tmp/usage.sh"
-[ -f "$_parallel_tmp/status.sh" ] && source "$_parallel_tmp/status.sh"
 rm -rf "$_parallel_tmp" 2>/dev/null
 
 # Pre-load learning cache (used by LEARNING section)
@@ -533,7 +475,7 @@ parse_iso_epoch() {
 format_time_until() {
     local reset_epoch="$1"
     [ -z "$reset_epoch" ] && { echo "—"; return; }
-    local now_epoch=$(date +%s)
+    local now_epoch=$_NOW
     local diff=$((reset_epoch - now_epoch))
     [ "$diff" -le 0 ] && { echo "now"; return; }
     local h=$((diff / 3600)) m=$(((diff % 3600) / 60))
@@ -559,40 +501,27 @@ format_clock_time() {
     fi
 }
 
-# Render context bar - gradient progress bar using (potentially scaled) percentage
+# Render context bar - gradient progress bar (always 10 buckets)
 render_context_bar() {
-    local width=$1 pct=$2
+    local pct=$1
     local output=""
-
-    local filled=$((pct * width / 100))
+    local filled=$((pct * 10 / 100))
     [ "$filled" -lt 0 ] && filled=0
-
-    for i in $(seq 1 $width 2>/dev/null); do
+    local i
+    for i in 1 2 3 4 5 6 7 8 9 10; do
         if [ "$i" -le "$filled" ]; then
-            # Each bar colored by its position — same thresholds as text %
-            local pos_pct=$((i * 100 / width))
-            local color
-            if [ "$pos_pct" -ge 90 ]; then color="$SCALE_RED"
-            elif [ "$pos_pct" -ge 80 ]; then color="$SCALE_ORANGE"
-            elif [ "$pos_pct" -ge 70 ]; then color="$SCALE_YELLOW"
-            elif [ "$pos_pct" -ge 50 ]; then color="$SCALE_LIME"
-            else color="$SCALE_GREEN"
+            local pos_pct=$((i * 10))
+            if [ "$pos_pct" -ge 90 ]; then output="${output}${SCALE_RED}▅${RESET}"
+            elif [ "$pos_pct" -ge 80 ]; then output="${output}${SCALE_ORANGE}▅${RESET}"
+            elif [ "$pos_pct" -ge 70 ]; then output="${output}${SCALE_YELLOW}▅${RESET}"
+            elif [ "$pos_pct" -ge 50 ]; then output="${output}${SCALE_LIME}▅${RESET}"
+            else output="${output}${SCALE_GREEN}▅${RESET}"
             fi
-            output="${output}${color}▅${RESET}"
         else
             output="${output}${CTX_BUCKET_EMPTY}▁${RESET}"
         fi
     done
-
-    output="${output% }"
     echo "$output"
-    LAST_BUCKET_COLOR="${last_color:-$EMERALD}"
-}
-
-# Calculate optimal bar width to match statusline content width (72 chars)
-# Returns buckets that fill the same visual width as separator lines
-calc_bar_width() {
-    echo 10
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -631,7 +560,7 @@ fi
 
 # Calculate age display from prefetched last_commit_epoch
 if [ "$is_git_repo" = "true" ] && [ -n "$last_commit_epoch" ]; then
-    now_epoch=$(date +%s)
+    now_epoch=$_NOW
     age_seconds=$((now_epoch - last_commit_epoch))
     age_minutes=$((age_seconds / 60))
     age_hours=$((age_seconds / 3600))
@@ -680,7 +609,7 @@ fi
 LEARNING_CACHE_TTL=30  # seconds
 
 if [ -f "$RATINGS_FILE" ] && [ -s "$RATINGS_FILE" ]; then
-    now=$(date +%s)
+    now=$_NOW
 
     # Check cache validity (by mtime and ratings file mtime)
     cache_valid=false
@@ -938,9 +867,6 @@ else
     pct_color="$TEXT_GREEN"
 fi
 
-# Calculate bar width to match statusline content width (72 chars)
-bar_width=$(calc_bar_width "$MODE")
-
 # Context bar + usage are combined on a single line (see usage section below)
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -993,8 +919,7 @@ if [ "$usage_5h_int" -gt 0 ] || [ -f "$USAGE_CACHE" ]; then
         mini)       suffix_len=7 ;;   # " │ ◇ 0"
         normal)     suffix_len=16 ;;  # " │ Research 0"
     esac
-    ctx_bar_width=10
-    bar=$(render_context_bar $ctx_bar_width $display_pct)
+    bar=$(render_context_bar $display_pct)
 
     # Combined line: Context + Usage + Rating
     case "$MODE" in
@@ -1015,7 +940,7 @@ if [ "$usage_5h_int" -gt 0 ] || [ -f "$USAGE_CACHE" ]; then
     esac
 else
     # No usage data — Context only
-    bar=$(render_context_bar $bar_width $display_pct)
+    bar=$(render_context_bar $display_pct)
 
     case "$MODE" in
         nano|micro)
@@ -1134,6 +1059,16 @@ if ! [ -f "$_bg_lock" ] || [ $(($(date +%s) - $(get_mtime "$_bg_lock"))) -gt 10 
                         fi
                     fi
                     echo "$_usage_json" | jq '.' > "$USAGE_CACHE" 2>/dev/null
+                    # Pre-build .sh cache for instant source on next render
+                    echo "$_usage_json" | jq -r '
+                        "usage_5h=" + (.five_hour.utilization // 0 | tostring) + "\n" +
+                        "usage_5h_reset=" + (.five_hour.resets_at // "" | @sh) + "\n" +
+                        "usage_7d=" + (.seven_day.utilization // 0 | tostring) + "\n" +
+                        "usage_7d_reset=" + (.seven_day.resets_at // "" | @sh) + "\n" +
+                        "usage_opus=" + (if .seven_day_opus then (.seven_day_opus.utilization // 0 | tostring) else "null" end) + "\n" +
+                        "usage_sonnet=" + (if .seven_day_sonnet then (.seven_day_sonnet.utilization // 0 | tostring) else "null" end) + "\n" +
+                        "usage_ws_cost_cents=" + (.workspace_cost.month_used_cents // 0 | tostring)
+                    ' > "$PAI_DIR/MEMORY/STATE/usage-cache.sh" 2>/dev/null
                 fi
             fi
         fi
@@ -1145,6 +1080,10 @@ if ! [ -f "$_bg_lock" ] || [ $(($(date +%s) - $(get_mtime "$_bg_lock"))) -gt 10 
             _status_body=$(curl -s --max-time 3 "https://status.claude.com/api/v2/status.json" 2>/dev/null)
             if [ -n "$_status_body" ] && echo "$_status_body" | jq -e '.status.indicator' >/dev/null 2>&1; then
                 echo "$_status_body" > "$STATUS_CACHE"
+                # Pre-build .sh cache for instant source on next render
+                _s_ind=$(echo "$_status_body" | jq -r '.status.indicator // "unknown"')
+                _s_desc=$(echo "$_status_body" | jq -r '.status.description // "fetch failed" | ascii_downcase | if . == "all systems operational" then "ok" else . end')
+                printf "claude_status_indicator='%s'\nclaude_status_desc='%s'\n" "$_s_ind" "$_s_desc" > "$PAI_DIR/MEMORY/STATE/status-cache.sh"
             fi
         fi
 
