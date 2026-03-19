@@ -1,6 +1,6 @@
-# PAI Status Line
+# PAI statusline
 
-A responsive, information-dense status line for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) built for the [PAI](https://codeberg.org/ljubitje/pai) personal AI infrastructure.
+Dense personal statusline for [PAI](https://codeberg.org/ljubitje/pai), using [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
 
 ## What it shows
 
