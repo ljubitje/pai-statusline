@@ -600,6 +600,8 @@ usage_5h_int=${usage_5h%%.*}
 
 if [ "$usage_5h_int" -gt 0 ] || [ -f "$USAGE_CACHE" ]; then
     usage_5h_color=$(get_usage_color "$usage_5h_int")
+    battery_icon="🔋"
+    [ "$usage_5h_int" -ge 90 ] && battery_icon="🪫"
     if [ -n "$usage_5h_hour" ]; then
         reset_5h_time="$usage_5h_hour"
     elif [ -n "$usage_5h_reset" ]; then
@@ -607,9 +609,9 @@ if [ "$usage_5h_int" -gt 0 ] || [ -f "$USAGE_CACHE" ]; then
     else
         reset_5h_time="—"
     fi
-    printf -v usage_full '%b' "🧮${bar} ${pct_color}${raw_pct}%${RESET} 🔋${usage_5h_color}${usage_5h_int}%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}"
-    printf -v usage_dense '%b' "🧮${pct_color}${raw_pct}%${RESET} 🔋${usage_5h_color}${usage_5h_int}%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}"
-    printf -v usage_ultra '%b' "🧮${pct_color}${raw_pct}%${RESET} 🔋${usage_5h_color}${usage_5h_int}%${RESET}"
+    printf -v usage_full '%b' "🧮${bar} ${pct_color}${raw_pct}%${RESET} ${battery_icon}${usage_5h_color}${usage_5h_int}%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}"
+    printf -v usage_dense '%b' "🧮${pct_color}${raw_pct}%${RESET} ${battery_icon}${usage_5h_color}${usage_5h_int}%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}"
+    printf -v usage_ultra '%b' "🧮${pct_color}${raw_pct}%${RESET} ${battery_icon}${usage_5h_color}${usage_5h_int}%${RESET}"
 else
     printf -v usage_full '%b' "🧮${bar} ${pct_color}${raw_pct}%${RESET}"
     printf -v usage_dense '%b' "🧮${pct_color}${raw_pct}%${RESET}"
