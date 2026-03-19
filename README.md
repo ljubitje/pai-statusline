@@ -1,6 +1,6 @@
 # PAI statusline
 
-Dense personal statusline for [PAI](https://codeberg.org/ljubitje/pai), using [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
+Dense personal statusline for [PAI](https://github.com/danielmiessler/pai), using [Claude Code](https://claude.com/product/claude-code).
 
 ## What it shows
 
@@ -32,6 +32,14 @@ Adapts to terminal width automatically:
 - `curl` (for Claude service status + usage API)
 
 ## Installation
+
+### Via PAI / Claude Code
+
+In any PAI/CC session, say:
+
+> Install codeberg.org/ljubitje/pai-statusline
+
+PAI/CC will clone the repo, read the setup instructions, and handle the rest.
 
 ### Manual
 
@@ -65,14 +73,6 @@ If you have a `PAI_DIR` environment variable set, use that path instead:
 ```
 
 3. Restart Claude Code. The statusline appears at the bottom of your terminal.
-
-### Via Claude Code
-
-Clone this repo, open Claude Code in the repo directory, and say:
-
-> Install the PAI statusline for me.
-
-Claude Code will read the setup instructions and handle the rest.
 
 ## Configuration
 
