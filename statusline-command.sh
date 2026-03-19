@@ -65,22 +65,17 @@ get_mtime() {
 
 input=$(cat)
 
-# Get DA name from settings (single source of truth)
-DA_NAME=$(jq -r '.daidentity.name // .daidentity.displayName // .env.DA // "Assistant"' "$SETTINGS_FILE" 2>/dev/null)
+# Extract all settings in a single jq call (was 4 separate calls)
+eval "$(jq -r '
+  "DA_NAME=" + (.daidentity.name // .daidentity.displayName // .env.DA // "Assistant" | @sh) + "\n" +
+  "USER_TZ=" + (.principal.timezone // "UTC" | @sh) + "\n" +
+  "PAI_VERSION=" + (.pai.version // "—" | @sh) + "\n" +
+  "COMPACTION_THRESHOLD=" + (.contextDisplay.compactionThreshold // 100 | tostring)
+' "$SETTINGS_FILE" 2>/dev/null)"
 DA_NAME="${DA_NAME:-Assistant}"
-
-# Get user timezone from settings (for reset time display)
-USER_TZ=$(jq -r '.principal.timezone // empty' "$SETTINGS_FILE" 2>/dev/null)
 USER_TZ="${USER_TZ:-UTC}"
-
-# Get PAI version from settings
-PAI_VERSION=$(jq -r '.pai.version // "—"' "$SETTINGS_FILE" 2>/dev/null)
 PAI_VERSION="${PAI_VERSION:-—}"
-
-# Get Algorithm version from settings.json (single source of truth)
-# ALGO_VERSION — DISABLED: ships with PAI, redundant
-# ALGO_VERSION=$(jq -r '.pai.algorithmVersion // "—"' "$SETTINGS_FILE" 2>/dev/null)
-# ALGO_VERSION="${ALGO_VERSION:-—}"
+COMPACTION_THRESHOLD="${COMPACTION_THRESHOLD:-100}"
 
 # Extract all data from JSON in single jq call
 eval "$(echo "$input" | jq -r '
@@ -275,7 +270,7 @@ COUNTSEOF
         else
             cred_json=$(cat "${HOME}/.claude/.credentials.json" 2>/dev/null)
         fi
-        token=$(echo "$cred_json" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('claudeAiOauth',{}).get('accessToken',''))" 2>/dev/null)
+        token=$(echo "$cred_json" | jq -r '.claudeAiOauth.accessToken // ""' 2>/dev/null)
 
         if [ -n "$token" ]; then
             usage_json=$(curl -s --max-time 3 \
@@ -587,76 +582,43 @@ get_usage_color() {
     fi
 }
 
-# Calculate human-readable time until reset from ISO 8601 timestamp
-# Uses TZ from settings.json (principal.timezone) for correct local time
-time_until_reset() {
-    local reset_ts="$1"
-    [ -z "$reset_ts" ] && { echo "—"; return; }
-    # Use python3 for reliable ISO 8601 parsing with timezone handling
-    local diff=$(python3 -c "
-from datetime import datetime, timezone
-import sys
-try:
-    ts = '$reset_ts'
-    # Parse ISO 8601 with timezone
-    from datetime import datetime
-    if '+' in ts[10:]:
-        dt = datetime.fromisoformat(ts)
-    elif ts.endswith('Z'):
-        dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
-    else:
-        dt = datetime.fromisoformat(ts + '+00:00')
-    now = datetime.now(timezone.utc)
-    diff = int((dt - now).total_seconds())
-    print(max(diff, 0))
-except:
-    print(-1)
-" 2>/dev/null)
-    [ -z "$diff" ] || [ "$diff" = "-1" ] && { echo "—"; return; }
+# Parse ISO 8601 timestamp to epoch seconds using GNU date
+# Handles Z suffix, timezone offsets (+00:00), and bare timestamps
+parse_iso_epoch() {
+    local ts="$1"
+    [ -z "$ts" ] && return 1
+    # GNU date -d handles ISO 8601 natively
+    date -d "$ts" +%s 2>/dev/null
+}
+
+# Calculate human-readable time until reset from epoch
+format_time_until() {
+    local reset_epoch="$1"
+    [ -z "$reset_epoch" ] && { echo "—"; return; }
+    local now_epoch=$(date +%s)
+    local diff=$((reset_epoch - now_epoch))
     [ "$diff" -le 0 ] && { echo "now"; return; }
-    local hours=$((diff / 3600))
-    local mins=$(((diff % 3600) / 60))
-    if [ "$hours" -ge 24 ]; then
-        local days=$((hours / 24))
-        local rem_hours=$((hours % 24))
-        [ "$rem_hours" -gt 0 ] && echo "${days}d${rem_hours}h" || echo "${days}d"
-    elif [ "$hours" -gt 0 ]; then
-        echo "${hours}h${mins}m"
+    local h=$((diff / 3600)) m=$(((diff % 3600) / 60))
+    if [ "$h" -ge 24 ]; then
+        local d=$((h / 24)) rh=$((h % 24))
+        [ "$rh" -gt 0 ] && echo "${d}d${rh}h" || echo "${d}d"
+    elif [ "$h" -gt 0 ]; then
+        echo "${h}h${m}m"
     else
-        echo "${mins}m"
+        echo "${m}m"
     fi
 }
 
-# Calculate local clock time from ISO 8601 reset timestamp
-# Returns format like "3:45p" for 5H or "Mon 3p" for weekly
-reset_clock_time() {
-    local reset_ts="$1" fmt="$2"
-    [ -z "$reset_ts" ] && { echo ""; return; }
-    local result=$(python3 -c "
-from datetime import datetime, timezone, timedelta
-import sys
-try:
-    ts = '$reset_ts'
-    if '+' in ts[10:]:
-        dt = datetime.fromisoformat(ts)
-    elif ts.endswith('Z'):
-        dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
-    else:
-        dt = datetime.fromisoformat(ts + '+00:00')
-    # Convert to Pacific
-    from zoneinfo import ZoneInfo
-    local_dt = dt.astimezone(ZoneInfo('$USER_TZ'))
-    if '$fmt' == 'weekly':
-        day = local_dt.strftime('%a')
-        hour = local_dt.strftime('%H:%M')
-        print(f'{day} {hour}')
-    else:
-        hour = local_dt.strftime('%H:%M')
-        print(hour)
-except:
-    print('')
-" 2>/dev/null)
-    echo "$result"
+# Convert ISO 8601 timestamp to local clock time (e.g., "15:30" or "15h")
+format_clock_time() {
+    local ts="$1"
+    [ -z "$ts" ] && return
+    local minute=$(TZ="$USER_TZ" date -d "$ts" +"%M" 2>/dev/null) || return
+    if [ "$minute" = "00" ]; then
+        TZ="$USER_TZ" date -d "$ts" +"%-Hh" 2>/dev/null
+    else
+        TZ="$USER_TZ" date -d "$ts" +"%-H:%M" 2>/dev/null
+    fi
 }
 
 # Render context bar - gradient progress bar using (potentially scaled) percentage
@@ -1009,9 +971,7 @@ fi
 context_max="${context_max:-200000}"
 max_k=$((context_max / 1000))
 
-# Read compaction threshold from settings (default 100 = no scaling)
-COMPACTION_THRESHOLD=$(jq -r '.contextDisplay.compactionThreshold // 100' "$SETTINGS_FILE" 2>/dev/null)
-COMPACTION_THRESHOLD="${COMPACTION_THRESHOLD:-100}"
+# COMPACTION_THRESHOLD already extracted in consolidated settings jq call above
 
 # Get raw percentage from Claude Code
 raw_pct="${context_pct%%.*}"  # Remove decimals
@@ -1057,45 +1017,10 @@ usage_5h_int=${usage_5h%%.*}
 if [ "$usage_5h_int" -gt 0 ] || [ -f "$USAGE_CACHE" ]; then
     usage_5h_color=$(get_usage_color "$usage_5h_int")
 
-    # Compute 5h reset time
-    eval "$(python3 -c "
-from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
-
-def parse_ts(ts):
-    if not ts: return None
-    try:
-        if '+' in ts[10:]:
-            return datetime.fromisoformat(ts)
-        elif ts.endswith('Z'):
-            return datetime.fromisoformat(ts.replace('Z', '+00:00'))
-        else:
-            return datetime.fromisoformat(ts + '+00:00')
-    except: return None
-
-def time_until(ts):
-    dt = parse_ts(ts)
-    if not dt: return '—'
-    diff = int((dt - datetime.now(timezone.utc)).total_seconds())
-    if diff <= 0: return 'now'
-    h, m = diff // 3600, (diff % 3600) // 60
-    if h >= 24:
-        d, rh = h // 24, h % 24
-        return f'{d}d{rh}h' if rh > 0 else f'{d}d'
-    return f'{h}h{m}m' if h > 0 else f'{m}m'
-
-def clock_time(ts):
-    dt = parse_ts(ts)
-    if not dt: return ''
-    local_dt = dt.astimezone(ZoneInfo('$USER_TZ'))
-    return local_dt.strftime('%-Hh') if local_dt.minute == 0 else local_dt.strftime('%-H:%M')
-
-r5h = '$usage_5h_reset'
-print(f\"reset_5h='{time_until(r5h)}'\")
-print(f\"clock_5h='{clock_time(r5h)}'\")
-
-" 2>/dev/null)"
-    reset_5h="${reset_5h:-—}"
+    # Compute 5h reset time using GNU date (no python3)
+    _reset_epoch=$(parse_iso_epoch "$usage_5h_reset")
+    reset_5h=$(format_time_until "$_reset_epoch")
+    clock_5h=$(format_clock_time "$usage_5h_reset")
 
     # Reset time: just use clock time directly (no countdown, no parens)
     reset_5h_time="${clock_5h:-${reset_5h}}"

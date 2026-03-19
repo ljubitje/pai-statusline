@@ -91,7 +91,7 @@ Total render time target: <200ms.
 
 - `bash` (4.0+)
 - `jq` (JSON processing)
-- `python3` (timezone/time calculations)
+- `date` (GNU coreutils, for timezone/time calculations)
 - `git` (optional, for git status info)
 - `curl` (for Claude Code service status + usage API)
 
