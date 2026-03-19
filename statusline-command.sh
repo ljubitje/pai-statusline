@@ -509,8 +509,8 @@ CACHE_EOF
     fi
 else
     # No ratings file — show placeholder
-    printf -v learn_full '%b' "🧠${SLATE_400}?${RESET} ${SLATE_300}no ratings${RESET} ✨${SLATE_400}7${RESET} ⭐${SLATE_300}0${RESET}"
-    printf -v learn_dense '%b' "🧠${SLATE_400}?${RESET} ✨${SLATE_400}7${RESET} ⭐${SLATE_300}0${RESET}"
+    printf -v learn_full '%b' "🧠${SLATE_400}?${RESET} ${SLATE_300}no ratings${RESET} ⭐${SLATE_300}0${RESET}"
+    printf -v learn_dense '%b' "🧠${SLATE_400}?${RESET} ⭐${SLATE_300}0${RESET}"
     printf -v learn_ultra '%b' "🧠${SLATE_400}?${RESET}"
 fi
 
