@@ -14,8 +14,8 @@ Dense 2-line personal statusline for [PAI](https://github.com/danielmiessler/pai
 | | ⏳ | 1h23m | Session wall-clock time |
 | | 📍 | myproject | Current directory |
 | | 🌳 | <span style="color:rgb(74,222,128)">clean</span> | Git tree state (clean/staged/unstaged/untracked) |
-| Context | 🧮 | <span style="color:rgb(70,175,95)">▅▅▅▅</span><span style="color:rgb(99,99,99)">▁▁▁▁▁▁</span> <span style="color:rgb(70,175,95)">42%</span> | Context window usage |
-| Usage | 🔋 | <span style="color:rgb(150,190,40)">65%</span> | 5-hour utilization |
+| Usage | 🧮 | <span style="color:rgb(70,175,95)">▅▅▅▅</span><span style="color:rgb(150,190,40)">▅▅</span><span style="color:rgb(255,193,7)">▅</span><span style="color:rgb(99,99,99)">▁▁▁</span> <span style="color:rgb(255,193,7)">72%</span> | Context window usage |
+| | 🔋 | <span style="color:rgb(150,190,40)">65%</span> | 5-hour utilization |
 | | 🔄 | 15:30 | Reset time (local clock) |
 | Learning | ⭐ | 12 | Total ratings count |
 | | 🧠 | <span style="color:rgb(150,190,40)">7.1</span> | All-time average |
