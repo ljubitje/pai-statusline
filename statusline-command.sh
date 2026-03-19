@@ -121,9 +121,14 @@ mkdir -p "$_parallel_tmp"
 USAGE_CACHE_SH="$PAI_DIR/MEMORY/STATE/usage-cache.sh"
 if [ -f "$USAGE_CACHE_SH" ]; then
     source "$USAGE_CACHE_SH"
+elif [ -f "$USAGE_CACHE" ]; then
+    # Fallback: parse JSON directly if .sh cache missing
+    eval "$(jq -r '
+        "usage_5h=" + (.five_hour.utilization // 0 | tostring) + "\n" +
+        "usage_5h_reset=" + (.five_hour.resets_at // "" | @sh)
+    ' "$USAGE_CACHE" 2>/dev/null)"
 else
-    usage_5h=0; usage_7d=0; usage_5h_reset=""; usage_7d_reset=""
-    usage_opus="null"; usage_sonnet="null"; usage_ws_cost_cents=0
+    usage_5h=0; usage_5h_reset=""
 fi
 
 # Status cache — direct source from pre-built .sh (updated by fire-and-forget block)
@@ -236,36 +241,20 @@ parse_iso_epoch() {
     date -d "$ts" +%s 2>/dev/null
 }
 
-# Calculate human-readable time until reset from epoch
-format_time_until() {
-    local reset_epoch="$1"
-    [ -z "$reset_epoch" ] && { echo "—"; return; }
-    local now_epoch=$_NOW
-    local diff=$((reset_epoch - now_epoch))
-    [ "$diff" -le 0 ] && { echo "now"; return; }
-    local h=$((diff / 3600)) m=$(((diff % 3600) / 60))
-    if [ "$h" -ge 24 ]; then
-        local d=$((h / 24)) rh=$((h % 24))
-        [ "$rh" -gt 0 ] && echo "${d}d${rh}h" || echo "${d}d"
-    elif [ "$h" -gt 0 ]; then
-        echo "${h}h${m}m"
-    else
-        echo "${m}m"
-    fi
-}
-
-# Convert ISO 8601 timestamp to local clock time (e.g., "15:30" or "15h")
-# Single date fork instead of 2
-format_clock_time() {
+# Format reset time as clock hour (e.g., "19h", "12.5h")
+# Takes ISO timestamp, converts to local timezone, rounds to nearest half hour
+format_reset_hour() {
     local ts="$1"
-    [ -z "$ts" ] && return
+    [ -z "$ts" ] && { echo "—"; return; }
     local hm
-    hm=$(TZ="$USER_TZ" date -d "$ts" +"%-H %M" 2>/dev/null) || return
+    hm=$(TZ="$USER_TZ" date -d "$ts" +"%-H %M" 2>/dev/null) || { echo "—"; return; }
     local h="${hm% *}" m="${hm#* }"
-    if [ "$m" = "00" ]; then
-        echo "${h}h"
+    if [ "$m" -ge 45 ]; then
+        echo "$(( h + 1 ))h"
+    elif [ "$m" -ge 15 ]; then
+        echo "${h}.5h"
     else
-        echo "${h}:${m}"
+        echo "${h}h"
     fi
 }
 
@@ -530,7 +519,7 @@ CACHE_EOF
         [ "$latest_source" = "explicit" ] && src_label="exp" || src_label="imp"
 
         # Build rating suffix for context line (normal mode)
-        rating_suffix=$(printf "⭐${SLATE_300}${ratings_count}${RESET} 🧠${ALL_COLOR}${all_avg}${RESET} %s ✨${LATEST_COLOR}${latest}${RESET} ${SLATE_300}(${src_label})${RESET}" "$all_sparkline")
+        rating_suffix=$(printf "🧠${ALL_COLOR}${all_avg}${RESET} %s ✨${LATEST_COLOR}${latest}${RESET} ${SLATE_300}(${src_label})${RESET} ⭐${SLATE_300}${ratings_count}${RESET}" "$all_sparkline")
 
     fi
 fi
@@ -591,15 +580,11 @@ usage_5h_int=${usage_5h%%.*}
 if [ "$usage_5h_int" -gt 0 ] || [ -f "$USAGE_CACHE" ]; then
     usage_5h_color=$(get_usage_color "$usage_5h_int")
 
-    # Reset time: pre-computed in .sh cache (no date forks during render)
-    # Falls back to live computation if cache didn't include these fields
-    if [ -n "$usage_5h_clock" ]; then
-        reset_5h_time="$usage_5h_clock"
+    # Reset time: pre-computed in .sh cache or live computation
+    if [ -n "$usage_5h_hour" ]; then
+        reset_5h_time="$usage_5h_hour"
     elif [ -n "$usage_5h_reset" ]; then
-        _reset_epoch=$(parse_iso_epoch "$usage_5h_reset")
-        reset_5h=$(format_time_until "$_reset_epoch")
-        clock_5h=$(format_clock_time "$usage_5h_reset")
-        reset_5h_time="${clock_5h:-${reset_5h}}"
+        reset_5h_time=$(format_reset_hour "$usage_5h_reset")
     else
         reset_5h_time="—"
     fi
@@ -663,14 +648,16 @@ if ! [ -f "$_bg_lock" ] || [ $(($(date +%s) - $(get_mtime "$_bg_lock"))) -gt 10 
                         "usage_sonnet=" + (if .seven_day_sonnet then (.seven_day_sonnet.utilization // 0 | tostring) else "null" end) + "\n" +
                         "usage_ws_cost_cents=" + (.workspace_cost.month_used_cents // 0 | tostring)
                     ' > "$PAI_DIR/MEMORY/STATE/usage-cache.sh" 2>/dev/null
-                    # Pre-compute clock time (saves 3 date forks on next render)
+                    # Pre-compute reset clock hour (no date forks on next render)
                     _5h_reset_ts=$(echo "$_usage_json" | jq -r '.five_hour.resets_at // ""' 2>/dev/null)
                     if [ -n "$_5h_reset_ts" ]; then
                         _hm=$(TZ="$USER_TZ" date -d "$_5h_reset_ts" +"%-H %M" 2>/dev/null)
                         if [ -n "$_hm" ]; then
                             _h="${_hm% *}" _m="${_hm#* }"
-                            if [ "$_m" = "00" ]; then _clock="${_h}h"; else _clock="${_h}:${_m}"; fi
-                            echo "usage_5h_clock='$_clock'" >> "$PAI_DIR/MEMORY/STATE/usage-cache.sh"
+                            if [ "$_m" -ge 45 ]; then _hr="$((_h + 1))h"
+                            elif [ "$_m" -ge 15 ]; then _hr="${_h}.5h"
+                            else _hr="${_h}h"; fi
+                            echo "usage_5h_hour='$_hr'" >> "$PAI_DIR/MEMORY/STATE/usage-cache.sh"
                         fi
                     fi
                 fi
