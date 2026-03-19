@@ -2,7 +2,7 @@
 
 Dense 2-line personal statusline for [PAI](https://github.com/danielmiessler/pai), using [Claude Code](https://claude.com/product/claude-code).
 
-![PAI statusline screenshot](screenshot.png)
+<img src="screenshot.png" alt="PAI statusline screenshot" height="83">
 
 ## What it shows
 
