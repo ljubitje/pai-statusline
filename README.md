@@ -2,7 +2,7 @@
 
 Dense 2-line personal statusline for [PAI](https://github.com/danielmiessler/pai), using [Claude Code](https://claude.com/product/claude-code).
 
-<img src="screenshot.png" alt="PAI statusline screenshot">
+<img src="screenshot.png" alt="PAI statusline screenshot" width="533">
 
 ## What it shows
 
@@ -26,13 +26,13 @@ Dense 2-line personal statusline for [PAI](https://github.com/danielmiessler/pai
 The statusline adapts to your terminal width, picking the largest statusline that fits:
 
 **full**
-<img src="tier-full.png" alt="full density">
+<img src="tier-full.png" alt="full density" width="629">
 
 **dense**
-<img src="tier-dense.png" alt="dense density">
+<img src="tier-dense.png" alt="dense density" width="629">
 
 **ultradense**
-<img src="tier-ultradense.png" alt="ultradense density">
+<img src="tier-ultradense.png" alt="ultradense density" width="629">
 
 ## Installation via PAI (recommended)
 
