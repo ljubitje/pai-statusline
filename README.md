@@ -1,6 +1,6 @@
 # PAI statusline
 
-Dense personal statusline for [PAI](https://github.com/danielmiessler/pai), using [Claude Code](https://claude.com/product/claude-code).
+Dense 2-line personal statusline for [PAI](https://github.com/danielmiessler/pai), using [Claude Code](https://claude.com/product/claude-code).
 
 ## What it shows
 
@@ -23,19 +23,11 @@ Adapts to terminal width automatically:
 | `mini` | 55-79 | Balanced information density |
 | `normal` | 80+ | Full display with sparklines |
 
-## Dependencies
-
-- `bash` (4.0+)
-- `jq` (JSON processing)
-- `python3` (timezone/time calculations)
-- `git` (optional, for git status info)
-- `curl` (for Claude Code service status + usage API)
-
 ## Installation
 
-### Via PAI / Claude Code
+### Via PAI
 
-In any PAI/CC session, say:
+In any PAI session, say:
 
 > Install codeberg.org/ljubitje/pai-statusline
 
@@ -85,6 +77,14 @@ The script receives JSON from Claude Code via stdin containing session data (con
 4. Renders each section according to the responsive mode
 
 Total render time target: <200ms.
+
+## Dependencies
+
+- `bash` (4.0+)
+- `jq` (JSON processing)
+- `python3` (timezone/time calculations)
+- `git` (optional, for git status info)
+- `curl` (for Claude Code service status + usage API)
 
 ## License
 
