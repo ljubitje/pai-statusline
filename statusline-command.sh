@@ -234,20 +234,23 @@ parse_iso_epoch() {
     date -d "$ts" +%s 2>/dev/null
 }
 
-# Format reset time as clock hour (e.g., "19h", "12.5h")
-# Takes ISO timestamp, converts to local timezone, rounds to nearest half hour
-format_reset_hour() {
+# Format reset time as countdown (e.g., "3h30m", "45m")
+# Takes ISO timestamp, computes time remaining from now
+format_reset_countdown() {
     local ts="$1"
     [ -z "$ts" ] && { echo "—"; return; }
-    local hm
-    hm=$(TZ="$USER_TZ" date -d "$ts" +"%-H %M" 2>/dev/null) || { echo "—"; return; }
-    local h="${hm% *}" m="${hm#* }"
-    if [ "$m" -ge 45 ]; then
-        echo "$(( h + 1 ))h"
-    elif [ "$m" -ge 15 ]; then
-        echo "${h}.5h"
+    local reset_epoch
+    reset_epoch=$(date -d "$ts" +%s 2>/dev/null) || { echo "—"; return; }
+    local remaining=$(( reset_epoch - _NOW ))
+    [ "$remaining" -le 0 ] && { echo "now"; return; }
+    local rh=$(( remaining / 3600 ))
+    local rm=$(( (remaining % 3600) / 60 ))
+    if [ "$rh" -gt 0 ]; then
+        rm=$(( (rm + 5) / 10 * 10 ))
+        [ "$rm" -eq 60 ] && { rh=$((rh + 1)); rm=0; }
+        [ "$rm" -gt 0 ] && echo "${rh}h${rm}m" || echo "${rh}h"
     else
-        echo "${h}h"
+        echo "${rm}m"
     fi
 }
 
@@ -602,10 +605,8 @@ if [ "$usage_5h_int" -gt 0 ] || [ -f "$USAGE_CACHE" ]; then
     usage_5h_color=$(get_usage_color "$usage_5h_int")
     battery_icon="🔋"
     [ "$usage_5h_int" -ge 90 ] && battery_icon="🪫"
-    if [ -n "$usage_5h_hour" ]; then
-        reset_5h_time="$usage_5h_hour"
-    elif [ -n "$usage_5h_reset" ]; then
-        reset_5h_time=$(format_reset_hour "$usage_5h_reset")
+    if [ -n "$usage_5h_reset" ]; then
+        reset_5h_time=$(format_reset_countdown "$usage_5h_reset")
     else
         reset_5h_time="—"
     fi
@@ -693,18 +694,7 @@ if ! [ -f "$_bg_lock" ] || [ $(($(date +%s) - $(get_mtime "$_bg_lock"))) -gt 10 
                         "usage_sonnet=" + (if .seven_day_sonnet then (.seven_day_sonnet.utilization // 0 | tostring) else "null" end) + "\n" +
                         "usage_ws_cost_cents=" + (.workspace_cost.month_used_cents // 0 | tostring)
                     ' > "$PAI_DIR/MEMORY/STATE/usage-cache.sh" 2>/dev/null
-                    # Pre-compute reset clock hour (no date forks on next render)
-                    _5h_reset_ts=$(echo "$_usage_json" | jq -r '.five_hour.resets_at // ""' 2>/dev/null)
-                    if [ -n "$_5h_reset_ts" ]; then
-                        _hm=$(TZ="$USER_TZ" date -d "$_5h_reset_ts" +"%-H %M" 2>/dev/null)
-                        if [ -n "$_hm" ]; then
-                            _h="${_hm% *}" _m="${_hm#* }"
-                            if [ "$_m" -ge 45 ]; then _hr="$((_h + 1))h"
-                            elif [ "$_m" -ge 15 ]; then _hr="${_h}.5h"
-                            else _hr="${_h}h"; fi
-                            echo "usage_5h_hour='$_hr'" >> "$PAI_DIR/MEMORY/STATE/usage-cache.sh"
-                        fi
-                    fi
+                    # Countdown is always computed live from usage_5h_reset (changes every render)
                 fi
             fi
         fi
