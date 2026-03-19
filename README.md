@@ -25,11 +25,11 @@ Dense 2-line personal statusline for [PAI](https://github.com/danielmiessler/pai
 
 Adapts to terminal width automatically, picking the largest tier that fits:
 
-| Tier | Line 1 | Line 2 |
-|------|--------|--------|
-| **full** | `PAI 4.0.3 CC 2.1.70 ⬤ ok │ ⏳1h23m 📍myproject 🌳clean` | `🧮▅▅▅▅▅▅▅▁▁▁ 72% 🔋65% 🔄19h │ 🧠7.1 ▄▃▄▅▃▄▄▃▅▄ ✨8 (exp) ⭐12` |
-| **dense** | `PAI/CC ⬤ ok │ ⏳1h23m 🌳clean` | `🧮72% 🔋65% 🔄19h │ 🧠7.1 ✨8 ⭐12` |
-| **ultradense** | `CC ⬤ ok │ 🌳clean` | `🧮72% 🔋65% │ 🧠7.1` |
+| Tier | Statusline |
+|------|------------|
+| **full** | <span style="color:rgb(30,58,138)">P</span><span style="color:rgb(59,130,246)">A</span><span style="color:rgb(147,197,253)">I</span> 4.0.3 <span style="color:rgb(217,119,87)">C</span><span style="color:rgb(191,87,59)">C</span> 2.1.70 <span style="color:rgb(70,175,95)">⬤</span> ok │ ⏳1h23m 📍myproject 🌳<span style="color:rgb(74,222,128)">clean</span><br>🧮<span style="color:rgb(70,175,95)">▅▅▅▅</span><span style="color:rgb(150,190,40)">▅▅</span><span style="color:rgb(255,193,7)">▅</span><span style="color:rgb(99,99,99)">▁▁▁</span> <span style="color:rgb(255,193,7)">72%</span> 🔋<span style="color:rgb(150,190,40)">65%</span> 🔄19h │ 🧠<span style="color:rgb(150,190,40)">7.1</span> <span style="color:rgb(150,190,40)">▄</span><span style="color:rgb(255,193,7)">▃</span><span style="color:rgb(150,190,40)">▄</span><span style="color:rgb(70,175,95)">▅</span><span style="color:rgb(255,193,7)">▃</span><span style="color:rgb(150,190,40)">▄▄</span><span style="color:rgb(255,193,7)">▃</span><span style="color:rgb(70,175,95)">▅</span><span style="color:rgb(150,190,40)">▄</span> ✨<span style="color:rgb(150,190,40)">8</span> (exp) ⭐12 |
+| **dense** | <span style="color:rgb(30,58,138)">P</span><span style="color:rgb(59,130,246)">A</span><span style="color:rgb(147,197,253)">I</span>/<span style="color:rgb(217,119,87)">C</span><span style="color:rgb(191,87,59)">C</span> <span style="color:rgb(70,175,95)">⬤</span> ok │ ⏳1h23m 🌳<span style="color:rgb(74,222,128)">clean</span><br>🧮<span style="color:rgb(255,193,7)">72%</span> 🔋<span style="color:rgb(150,190,40)">65%</span> 🔄19h │ 🧠<span style="color:rgb(150,190,40)">7.1</span> ✨<span style="color:rgb(150,190,40)">8</span> ⭐12 |
+| **ultradense** | <span style="color:rgb(217,119,87)">C</span><span style="color:rgb(191,87,59)">C</span> <span style="color:rgb(70,175,95)">⬤</span> ok │ 🌳<span style="color:rgb(74,222,128)">clean</span><br>🧮<span style="color:rgb(255,193,7)">72%</span> 🔋<span style="color:rgb(150,190,40)">65%</span> │ 🧠<span style="color:rgb(150,190,40)">7.1</span> |
 
 ## Installation via PAI (recommended)
 
