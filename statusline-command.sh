@@ -3,12 +3,7 @@
 # PAI Status Line
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# Responsive status line with 4 display modes based on terminal width:
-#   - nano   (<35 cols): Minimal single-line displays
-#   - micro  (35-54):    Compact with key metrics
-#   - mini   (55-79):    Balanced information density
-#   - normal (80+):      Full display with sparklines
-#
+# Dense 2-line statusline for PAI + Claude Code.
 # Context percentage scales to compaction threshold if configured in settings.json.
 # When contextDisplay.compactionThreshold is set (e.g., 62), the bar shows 62% as 100%.
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -49,7 +44,6 @@ eval "$(jq -r '
   "USER_TZ=" + (.principal.timezone // "UTC" | @sh) + "\n" +
   "PAI_VERSION=" + (.pai.version // "—" | @sh) + "\n" +
   "COMPACTION_THRESHOLD=" + (.contextDisplay.compactionThreshold // 100 | tostring) + "\n" +
-  "research_count=" + (.counts.research // 0 | tostring) + "\n" +
   "ratings_count=" + (.counts.ratings // 0 | tostring)
 ' "$SETTINGS_FILE" 2>/dev/null)"
 DA_NAME="${DA_NAME:-Assistant}"
@@ -149,61 +143,6 @@ rm -rf "$_parallel_tmp" 2>/dev/null
 
 LEARNING_CACHE="$PAI_DIR/MEMORY/STATE/learning-cache.sh"
 
-# ─────────────────────────────────────────────────────────────────────────────
-# TERMINAL WIDTH DETECTION
-# ─────────────────────────────────────────────────────────────────────────────
-# Hooks don't inherit terminal context. Try multiple methods.
-
-_width_cache="/tmp/pai-term-width-${KITTY_WINDOW_ID:-default}"
-
-detect_terminal_width() {
-    local width=""
-
-    # Tier 1: Kitty IPC (most accurate for Kitty panes)
-    if [ -n "$KITTY_WINDOW_ID" ] && command -v kitten >/dev/null 2>&1; then
-        width=$(kitten @ ls 2>/dev/null | jq -r --argjson wid "$KITTY_WINDOW_ID" \
-            '.[].tabs[].windows[] | select(.id == $wid) | .columns' 2>/dev/null)
-    fi
-
-    # Tier 2: Direct TTY query
-    [ -z "$width" ] || [ "$width" = "0" ] || [ "$width" = "null" ] && \
-        width=$(stty size </dev/tty 2>/dev/null | awk '{print $2}')
-
-    # Tier 3: tput fallback
-    [ -z "$width" ] || [ "$width" = "0" ] && width=$(tput cols 2>/dev/null)
-
-    # If we got a real width, cache it for subprocess re-renders
-    if [ -n "$width" ] && [ "$width" != "0" ] && [ "$width" -gt 0 ] 2>/dev/null; then
-        echo "$width" > "$_width_cache" 2>/dev/null
-        echo "$width"
-        return
-    fi
-
-    # Tier 4: Read cached width from previous successful detection
-    if [ -f "$_width_cache" ]; then
-        local cached
-        cached=$(cat "$_width_cache" 2>/dev/null)
-        if [ "$cached" -gt 0 ] 2>/dev/null; then
-            echo "$cached"
-            return
-        fi
-    fi
-
-    # Tier 5: Environment variable / default
-    echo "${COLUMNS:-80}"
-}
-
-term_width=$(detect_terminal_width)
-
-if [ "$term_width" -lt 35 ]; then
-    MODE="nano"
-elif [ "$term_width" -lt 55 ]; then
-    MODE="micro"
-elif [ "$term_width" -lt 80 ]; then
-    MODE="mini"
-else
-    MODE="normal"
-fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # COLOR PALETTE
@@ -242,8 +181,6 @@ GIT_AGE_STALE='\033[38;2;59;130;246m'
 GIT_AGE_OLD='\033[38;2;99;102;241m'
 
 # Learning / signal
-LEARN_RESEARCH='\033[38;2;79;90;198m'
-SIGNAL_PERIOD='\033[38;2;229;229;229m'
 
 # Context bar
 CTX_BUCKET_EMPTY='\033[38;2;99;99;99m'
@@ -401,26 +338,6 @@ if [ "$is_git_repo" = "true" ] && [ -n "$last_commit_epoch" ]; then
     fi
 fi
 
-case "$MODE" in
-    nano)
-        if [ "$is_git_repo" = true ]; then
-            [ -n "$tree_display" ] && printf "${tree_display}"
-        fi
-        printf "\n"
-        ;;
-    micro)
-        if [ "$is_git_repo" = true ]; then
-            [ -n "$tree_display" ] && printf "🌳${tree_display}"
-        fi
-        printf "\n"
-        ;;
-    mini)
-        if [ "$is_git_repo" = true ]; then
-            [ -n "$tree_display" ] && printf "🌳${tree_display}"
-        fi
-        printf "\n"
-        ;;
-esac
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # LEARNING (with sparklines in normal mode)
@@ -615,23 +532,6 @@ CACHE_EOF
         # Build rating suffix for context line (normal mode)
         rating_suffix=$(printf "⭐${SLATE_300}${ratings_count}${RESET} 🧠${ALL_COLOR}${all_avg}${RESET} %s ✨${LATEST_COLOR}${latest}${RESET} ${SLATE_300}(${src_label})${RESET}" "$all_sparkline")
 
-        case "$MODE" in
-            nano)
-                printf "${PAI_P}P${PAI_A}A${PAI_I}I${RESET} ${SLATE_500}${PAI_VERSION}${RESET} ${_status_color}${_status_icon}${RESET} ${LATEST_COLOR}${latest}${RESET} ${SIGNAL_PERIOD}1d:${RESET} ${TODAY_COLOR}${today_avg}${RESET}\n"
-                ;;
-            micro)
-                printf "${PAI_P}P${PAI_A}A${PAI_I}I${RESET} ${SLATE_500}${PAI_VERSION}${RESET}${_status_display} ${SLATE_600}│${RESET} ${LATEST_COLOR}${latest}${RESET} ${SIGNAL_PERIOD}1h:${RESET} ${HOUR_COLOR}${hour_avg}${RESET} ${SIGNAL_PERIOD}1d:${RESET} ${TODAY_COLOR}${today_avg}${RESET} ${SIGNAL_PERIOD}1w:${RESET} ${WEEK_COLOR}${week_avg}${RESET}\n"
-                ;;
-            mini)
-                printf "${PAI_P}P${PAI_A}A${PAI_I}I${RESET} ${SLATE_500}${PAI_VERSION}${RESET}${_status_display} ${SLATE_600}│${RESET} "
-                printf "${LATEST_COLOR}${latest}${RESET} "
-                printf "${SIGNAL_PERIOD}1h:${RESET} ${HOUR_COLOR}${hour_avg}${RESET} "
-                printf "${SIGNAL_PERIOD}1d:${RESET} ${TODAY_COLOR}${today_avg}${RESET} "
-                printf "${SIGNAL_PERIOD}1w:${RESET} ${WEEK_COLOR}${week_avg}${RESET}\n"
-                ;;
-            normal)
-                ;;
-        esac
     fi
 fi
 
@@ -644,10 +544,8 @@ case "${claude_status_indicator:-unknown}" in
 esac
 _status_display=" ${_status_color}${_status_icon}${RESET} ${SLATE_400}${claude_status_desc:-fetch failed}${RESET}"
 
-# PAI line (always shown in normal mode)
-if [ "$MODE" = "normal" ]; then
-    printf "${PAI_P}P${PAI_A}A${PAI_I}I${RESET} ${SLATE_500}${PAI_VERSION}${RESET} ${CC_C1}C${CC_C2}C${RESET} ${SLATE_500}${cc_version}${RESET}${_status_display} ${SLATE_600}│${RESET} ⏳${SLATE_400}${session_time}${RESET} 📍${SLATE_300}${dir_name}${RESET} 🌳${tree_display:-${SLATE_400}no repo${RESET}}\n"
-fi
+# Line 1: PAI header
+printf "${PAI_P}P${PAI_A}A${PAI_I}I${RESET} ${SLATE_500}${PAI_VERSION}${RESET} ${CC_C1}C${CC_C2}C${RESET} ${SLATE_500}${cc_version}${RESET}${_status_display} ${SLATE_600}│${RESET} ⏳${SLATE_400}${session_time}${RESET} 📍${SLATE_300}${dir_name}${RESET} 🌳${tree_display:-${SLATE_400}no repo${RESET}}\n"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CONTEXT
@@ -708,72 +606,19 @@ if [ "$usage_5h_int" -gt 0 ] || [ -f "$USAGE_CACHE" ]; then
         reset_5h_time="—"
     fi
 
-    # Build usage suffix (plain text for length calculation)
-    case "$MODE" in
-        nano)
-            usage_plain="USE: ${usage_5h_int}% │ ${reset_5h_time}"
-            usage_fmt="🔋${usage_5h_color}${usage_5h_int}%%${RESET} 🔄${USAGE_RESET}${reset_5h_time}${RESET}"
-            ;;
-        micro)
-            usage_plain="USE: ${usage_5h_int}% │ ${reset_5h_time}"
-            usage_fmt="🔋${usage_5h_color}${usage_5h_int}%%${RESET} 🔄${USAGE_RESET}${reset_5h_time}${RESET}"
-            ;;
-        mini)
-            usage_plain="USE: ${usage_5h_int}% │ ${reset_5h_time}"
-            usage_fmt="🔋${usage_5h_color}${usage_5h_int}%%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}"
-            ;;
-        normal)
-            usage_plain="USE: ${usage_5h_int}% │ ${reset_5h_time}"
-            usage_fmt="🔋${usage_5h_color}${usage_5h_int}%%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}"
-            ;;
-    esac
-
-    # Calculate context bar width accounting for all right-side content
-    # "Context: " (9) + bar + " XX%" (4) + " │ " usage + " │ " PAI suffix
-    usage_plain_len=${#usage_plain}
-    # Account for session time prefix (e.g. "1h23m │ " = time_len + 3)
-    time_prefix_len=$((${#session_time} + 3))
-    case "$MODE" in
-        nano|micro) suffix_len=0 ;;
-        mini)       suffix_len=7 ;;   # " │ ◇ 0"
-        normal)     suffix_len=16 ;;  # " │ Research 0"
-    esac
+    usage_fmt="🔋${usage_5h_color}${usage_5h_int}%%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}"
     bar=$(render_context_bar $display_pct)
 
     # Combined line: Context + Usage + Rating
-    case "$MODE" in
-        nano)
-            printf "⏳${SLATE_400}${session_time}${RESET} 🧮${bar} ${pct_color}${raw_pct}%%${RESET} ${usage_fmt}\n"
-            ;;
-        micro)
-            printf "⏳${SLATE_400}${session_time}${RESET} ${SLATE_600}│${RESET} 🧮${bar} ${pct_color}${raw_pct}%%${RESET} ${usage_fmt}\n"
-            ;;
-        mini)
-            printf "⏳${SLATE_400}${session_time}${RESET} ${SLATE_600}│${RESET} 🧮${bar} ${pct_color}${raw_pct}%%${RESET} ${usage_fmt} ${SLATE_600}│${RESET} ${LEARN_RESEARCH}◇${RESET} ${SLATE_300}${research_count}${RESET}\n"
-            ;;
-        normal)
-            printf "🧮${bar} ${pct_color}${raw_pct}%%${RESET} ${usage_fmt}"
-            [ -n "$rating_suffix" ] && printf " ${SLATE_600}│${RESET} ${rating_suffix}"
-            printf " ${SLATE_600}│${RESET} 🔎${SLATE_300}${research_count}${RESET}\n"
-            ;;
-    esac
+    printf "🧮${bar} ${pct_color}${raw_pct}%%${RESET} ${usage_fmt}"
+    [ -n "$rating_suffix" ] && printf " ${SLATE_600}│${RESET} ${rating_suffix}"
+    printf "\n"
 else
     # No usage data — Context only
     bar=$(render_context_bar $display_pct)
-
-    case "$MODE" in
-        nano|micro)
-            printf "⏳${SLATE_400}${session_time}${RESET} 🧮${bar} ${pct_color}${raw_pct}%%${RESET}\n"
-            ;;
-        mini)
-            printf "⏳${SLATE_400}${session_time}${RESET} ${SLATE_600}│${RESET} 🧮${bar} ${pct_color}${raw_pct}%%${RESET} ${SLATE_600}│${RESET} ${LEARN_RESEARCH}◇${RESET} ${SLATE_300}${research_count}${RESET}\n"
-            ;;
-        normal)
-            printf "🧮${bar} ${pct_color}${raw_pct}%%${RESET}"
-            [ -n "$rating_suffix" ] && printf " ${SLATE_600}│${RESET} ${rating_suffix}"
-            printf " ${SLATE_600}│${RESET} 🔎${SLATE_300}${research_count}${RESET}\n"
-            ;;
-    esac
+    printf "🧮${bar} ${pct_color}${raw_pct}%%${RESET}"
+    [ -n "$rating_suffix" ] && printf " ${SLATE_600}│${RESET} ${rating_suffix}"
+    printf "\n"
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
