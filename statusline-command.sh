@@ -4,8 +4,8 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 #
 # Dense 2-line statusline for PAI + Claude Code.
+# Four sections: Identity, Session, Usage, Learning.
 # Context percentage scales to compaction threshold if configured in settings.json.
-# When contextDisplay.compactionThreshold is set (e.g., 62), the bar shows 62% as 100%.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 set -o pipefail
@@ -293,7 +293,7 @@ render_context_bar() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# GIT STATUS
+# SESSION (session time, starting directory, git tree state)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Check working tree state
@@ -340,7 +340,7 @@ fi
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# LEARNING (with sparklines in normal mode)
+# LEARNING (ratings count, average rating, ratings bar, last rating)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 LEARNING_CACHE_TTL=30  # seconds
@@ -537,18 +537,19 @@ fi
 
 # Claude service status indicator
 case "${claude_status_indicator:-unknown}" in
-    none)     _status_icon="⬤"; _status_color="$TEXT_GREEN" ;;
-    minor)    _status_icon="⬤"; _status_color="$TEXT_YELLOW" ;;
+    none)        _status_icon="⬤"; _status_color="$TEXT_GREEN" ;;
+    minor)       _status_icon="⬤"; _status_color="$TEXT_YELLOW" ;;
     major|critical) _status_icon="⬤"; _status_color="$TEXT_RED" ;;
-    *)        _status_icon="◯"; _status_color="$SLATE_600" ;;
+    maintenance) _status_icon="⬤"; _status_color="$GIT_AGE_RECENT" ;;
+    *)           _status_icon="◯"; _status_color="$SLATE_600" ;;
 esac
 _status_display=" ${_status_color}${_status_icon}${RESET} ${SLATE_400}${claude_status_desc:-fetch failed}${RESET}"
 
-# Line 1: PAI header
+# IDENTITY (PAI version, CC version, Claude Code status)
 printf "${PAI_P}P${PAI_A}A${PAI_I}I${RESET} ${SLATE_500}${PAI_VERSION}${RESET} ${CC_C1}C${CC_C2}C${RESET} ${SLATE_500}${cc_version}${RESET}${_status_display} ${SLATE_600}│${RESET} ⏳${SLATE_400}${session_time}${RESET} 📍${SLATE_300}${dir_name}${RESET} 🌳${tree_display:-${SLATE_400}no repo${RESET}}\n"
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# CONTEXT
+# USAGE (context bar + %, 5h utilization %, reset time)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Context display - scale to compaction threshold if configured
@@ -581,9 +582,6 @@ fi
 
 # Context bar + usage are combined on a single line (see usage section below)
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# ACCOUNT USAGE (Claude API limits)
-# ═══════════════════════════════════════════════════════════════════════════════
 # NOTE: usage_5h, usage_5h_reset populated by PARALLEL PREFETCH
 
 usage_5h_int=${usage_5h%%.*}
@@ -688,7 +686,14 @@ if ! [ -f "$_bg_lock" ] || [ $(($(date +%s) - $(get_mtime "$_bg_lock"))) -gt 10 
                 echo "$_status_body" > "$STATUS_CACHE"
                 # Pre-build .sh cache for instant source on next render
                 _s_ind=$(echo "$_status_body" | jq -r '.status.indicator // "unknown"')
-                _s_desc=$(echo "$_status_body" | jq -r '.status.description // "fetch failed" | ascii_downcase | if . == "all systems operational" then "ok" else . end')
+                case "$_s_ind" in
+                    none)        _s_desc="ok" ;;
+                    minor)       _s_desc="degraded" ;;
+                    major)       _s_desc="outage" ;;
+                    critical)    _s_desc="outage" ;;
+                    maintenance) _s_desc="maintenance" ;;
+                    *)           _s_desc="unknown" ;;
+                esac
                 printf "claude_status_indicator='%s'\nclaude_status_desc='%s'\n" "$_s_ind" "$_s_desc" > "$PAI_DIR/MEMORY/STATE/status-cache.sh"
             fi
         fi
