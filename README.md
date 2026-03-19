@@ -6,7 +6,7 @@ Dense personal statusline for [PAI](https://github.com/danielmiessler/pai), usin
 
 | Section | Info |
 |---------|------|
-| **Header** | PAI version, Claude Code version, Claude service status, session time, directory, git tree state |
+| **Header** | PAI version, Claude Code version, Claude Code service status, session time, directory, git tree state |
 | **Git** | Stash count, ahead/behind remote |
 | **Learning** | Rating sparklines, averages (15m/1h/1d/1w/1m/all-time), trend direction |
 | **Context** | Gradient progress bar, raw percentage, compaction threshold scaling |
@@ -29,7 +29,7 @@ Adapts to terminal width automatically:
 - `jq` (JSON processing)
 - `python3` (timezone/time calculations)
 - `git` (optional, for git status info)
-- `curl` (for Claude service status + usage API)
+- `curl` (for Claude Code service status + usage API)
 
 ## Installation
 
@@ -43,25 +43,14 @@ PAI/CC will clone the repo, read the setup instructions, and handle the rest.
 
 ### Manual
 
-1. Copy the script to your Claude Code config directory:
+1. Copy the script:
 
 ```bash
-cp statusline-command.sh ~/.claude/statusline-command.sh
-chmod +x ~/.claude/statusline-command.sh
+cp statusline-command.sh $PAI_DIR/statusline-command.sh
+chmod +x $PAI_DIR/statusline-command.sh
 ```
 
-2. Add the statusline config to your `~/.claude/settings.json`:
-
-```json
-{
-  "statusLine": {
-    "type": "command",
-    "command": "$HOME/.claude/statusline-command.sh"
-  }
-}
-```
-
-If you have a `PAI_DIR` environment variable set, use that path instead:
+2. Add to `settings.json`:
 
 ```json
 {
@@ -72,7 +61,7 @@ If you have a `PAI_DIR` environment variable set, use that path instead:
 }
 ```
 
-3. Restart Claude Code. The statusline appears at the bottom of your terminal.
+3. Restart PAI/CC.
 
 ## Configuration
 
@@ -85,16 +74,6 @@ The statusline reads configuration from `settings.json`:
 | `daidentity.name` | `Assistant` | Your AI assistant's display name |
 | `pai.version` | `--` | PAI version string |
 | `counts.*` | `0` | Counts for skills, workflows, hooks, signals, etc. (populated by PAI stop hooks) |
-
-### PAI-specific features
-
-Some features require the broader PAI infrastructure:
-
-- **Learning signals & sparklines** -- requires `ratings.jsonl` from PAI's learning system
-- **Counts** (skills, workflows, hooks) -- populated by PAI's stop hooks
-- **DA identity** -- reads from PAI's `daidentity` config
-
-Without PAI, these sections gracefully show defaults or are skipped.
 
 ## How it works
 
