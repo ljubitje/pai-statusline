@@ -76,8 +76,9 @@ The script receives JSON from Claude Code via stdin containing session data (con
 1. Parses settings + input JSON in two `jq` calls (all data extracted upfront)
 2. Launches git status in a background subshell
 3. Sources pre-built `.sh` caches for usage and service status (instant, no parsing)
-4. Renders four sections: Identity, Session, Usage, Learning
-5. Fire-and-forget: refreshes usage/status caches in background for next render
+4. Detects terminal width and picks the largest density that fits (full → dense → ultradense)
+5. Renders four sections: Identity, Session, Usage, Learning
+6. Fire-and-forget: refreshes usage/status caches in background for next render
 
 Typical render time: ~100ms.
 

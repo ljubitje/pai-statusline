@@ -185,13 +185,8 @@ GIT_AGE_RECENT='\033[38;2;96;165;250m'
 GIT_AGE_STALE='\033[38;2;59;130;246m'
 GIT_AGE_OLD='\033[38;2;99;102;241m'
 
-# Learning / signal
-
 # Context bar
 CTX_BUCKET_EMPTY='\033[38;2;99;99;99m'
-
-# Usage
-USAGE_RESET='\033[38;2;229;229;229m'
 
 # PAI branding
 PAI_P='\033[38;2;30;58;138m'          # Navy
@@ -498,31 +493,60 @@ CACHE_EOF
     fi  # end cache computation
 
     if [ "$total_count" -gt 0 ] 2>/dev/null; then
-        # Trend icon/color
-        case "$trend" in
-            up)   trend_icon="↗"; trend_color="$EMERALD" ;;
-            down) trend_icon="↘"; trend_color="$ROSE" ;;
-            *)    trend_icon="→"; trend_color="$SLATE_400" ;;
-        esac
-
-        # Get colors
-        [ "$q15_avg" != "—" ] && pulse_base="$q15_avg" || { [ "$hour_avg" != "—" ] && pulse_base="$hour_avg" || { [ "$today_avg" != "—" ] && pulse_base="$today_avg" || pulse_base="$all_avg"; }; }
-        PULSE_COLOR=$(get_rating_color "$pulse_base")
-        LATEST_COLOR=$(get_rating_color "${latest:-5}")
-        Q15_COLOR=$(get_rating_color "${q15_avg:-5}")
-        HOUR_COLOR=$(get_rating_color "${hour_avg:-5}")
-        TODAY_COLOR=$(get_rating_color "${today_avg:-5}")
-        WEEK_COLOR=$(get_rating_color "${week_avg:-5}")
-        MONTH_COLOR=$(get_rating_color "${month_avg:-5}")
         ALL_COLOR=$(get_rating_color "$all_avg")
-
+        LATEST_COLOR=$(get_rating_color "${latest:-5}")
         [ "$latest_source" = "explicit" ] && src_label="exp" || src_label="imp"
 
-        # Build rating suffix for context line (normal mode)
-        rating_suffix=$(printf "🧠${ALL_COLOR}${all_avg}${RESET} %s ✨${LATEST_COLOR}${latest}${RESET} ${SLATE_300}(${src_label})${RESET} ⭐${SLATE_300}${ratings_count}${RESET}" "$all_sparkline")
-
+        # Build Learning at 3 densities
+        printf -v learn_full '%b' "🧠${ALL_COLOR}${all_avg}${RESET} ${all_sparkline} ✨${LATEST_COLOR}${latest}${RESET} ${SLATE_300}(${src_label})${RESET} ⭐${SLATE_300}${ratings_count}${RESET}"
+        printf -v learn_dense '%b' "🧠${ALL_COLOR}${all_avg}${RESET} ✨${LATEST_COLOR}${latest}${RESET} ⭐${SLATE_300}${ratings_count}${RESET}"
+        printf -v learn_ultra '%b' "🧠${ALL_COLOR}${all_avg}${RESET}"
     fi
 fi
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TERMINAL WIDTH + DISPLAY MEASUREMENT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_width_cache="/tmp/pai-term-width-${KITTY_WINDOW_ID:-default}"
+
+detect_terminal_width() {
+    local width=""
+    # Tier 1: Kitty IPC (most accurate for Kitty panes)
+    if [ -n "$KITTY_WINDOW_ID" ] && command -v kitten >/dev/null 2>&1; then
+        width=$(kitten @ ls 2>/dev/null | jq -r --argjson wid "$KITTY_WINDOW_ID" \
+            '.[].tabs[].windows[] | select(.id == $wid) | .columns' 2>/dev/null)
+    fi
+    # Tier 2: Direct TTY query
+    [ -z "$width" ] || [ "$width" = "0" ] || [ "$width" = "null" ] && \
+        width=$(stty size </dev/tty 2>/dev/null | awk '{print $2}')
+    # Tier 3: tput fallback
+    [ -z "$width" ] || [ "$width" = "0" ] && width=$(tput cols 2>/dev/null)
+    # Cache if valid
+    if [ -n "$width" ] && [ "$width" != "0" ] && [ "$width" -gt 0 ] 2>/dev/null; then
+        echo "$width" > "$_width_cache" 2>/dev/null
+        echo "$width"
+        return
+    fi
+    # Tier 4: Read cached width
+    if [ -f "$_width_cache" ]; then
+        local cached=$(cat "$_width_cache" 2>/dev/null)
+        [ "$cached" -gt 0 ] 2>/dev/null && { echo "$cached"; return; }
+    fi
+    # Tier 5: Default
+    echo "${COLUMNS:-80}"
+}
+
+term_width=$(detect_terminal_width)
+
+# Max display width of two lines (strip ANSI escapes, count display columns)
+display_max_width() {
+    printf '%s\n%s' "$1" "$2" | sed 's/\x1b\[[0-9;]*m//g' | wc -L
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# BUILD SECTIONS (full, dense, ultradense)
+# ═══════════════════════════════════════════════════════════════════════════════
 
 # Claude service status indicator
 case "${claude_status_indicator:-unknown}" in
@@ -535,52 +559,39 @@ esac
 _status_display=" ${_status_color}${_status_icon}${RESET} ${SLATE_400}${claude_status_desc:-fetch failed}${RESET}"
 
 # IDENTITY (PAI version, CC version, Claude Code status)
-printf "${PAI_P}P${PAI_A}A${PAI_I}I${RESET} ${SLATE_500}${PAI_VERSION}${RESET} ${CC_C1}C${CC_C2}C${RESET} ${SLATE_500}${cc_version}${RESET}${_status_display} ${SLATE_600}│${RESET} ⏳${SLATE_400}${session_time}${RESET} 📍${SLATE_300}${dir_name}${RESET} 🌳${tree_display:-${SLATE_400}no repo${RESET}}\n"
+printf -v id_full '%b' "${PAI_P}P${PAI_A}A${PAI_I}I${RESET} ${SLATE_500}${PAI_VERSION}${RESET} ${CC_C1}C${CC_C2}C${RESET} ${SLATE_500}${cc_version}${RESET}${_status_display}"
+printf -v id_dense '%b' "${PAI_P}P${PAI_A}A${PAI_I}I${RESET}/${CC_C1}C${CC_C2}C${RESET}${_status_display}"
+printf -v id_ultra '%b' "${CC_C1}C${CC_C2}C${RESET}${_status_display}"
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# SESSION (session time, starting directory, git tree state)
+printf -v sess_full '%b' "⏳${SLATE_400}${session_time}${RESET} 📍${SLATE_300}${dir_name}${RESET} 🌳${tree_display:-${SLATE_400}no repo${RESET}}"
+printf -v sess_dense '%b' "⏳${SLATE_400}${session_time}${RESET} 🌳${tree_display:-${SLATE_400}no repo${RESET}}"
+printf -v sess_ultra '%b' "🌳${tree_display:-${SLATE_400}no repo${RESET}}"
+
 # USAGE (context bar + %, 5h utilization %, reset time)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-# Context display - scale to compaction threshold if configured
-# Get raw percentage from Claude Code
-raw_pct="${context_pct%%.*}"  # Remove decimals
+raw_pct="${context_pct%%.*}"
 [ -z "$raw_pct" ] && raw_pct=0
 
-# Scale percentage: if threshold is 62, then 62% raw = 100% displayed
-# Formula: display_pct = (raw_pct * 100) / threshold
 if [ "$COMPACTION_THRESHOLD" -lt 100 ] && [ "$COMPACTION_THRESHOLD" -gt 0 ]; then
     display_pct=$((raw_pct * 100 / COMPACTION_THRESHOLD))
-    # Cap at 100% (could exceed if past compaction point)
     [ "$display_pct" -gt 100 ] && display_pct=100
 else
     display_pct="$raw_pct"
 fi
 
-# Color based on scaled percentage (same thresholds work for scaled 0-100%)
-if [ "$display_pct" -ge 90 ]; then
-    pct_color="$TEXT_RED"
-elif [ "$display_pct" -ge 80 ]; then
-    pct_color="$TEXT_ORANGE"
-elif [ "$display_pct" -ge 70 ]; then
-    pct_color="$TEXT_YELLOW"
-elif [ "$display_pct" -ge 50 ]; then
-    pct_color="$TEXT_LIME"
-else
-    pct_color="$TEXT_GREEN"
+if   [ "$display_pct" -ge 90 ]; then pct_color="$TEXT_RED"
+elif [ "$display_pct" -ge 80 ]; then pct_color="$TEXT_ORANGE"
+elif [ "$display_pct" -ge 70 ]; then pct_color="$TEXT_YELLOW"
+elif [ "$display_pct" -ge 50 ]; then pct_color="$TEXT_LIME"
+else pct_color="$TEXT_GREEN"
 fi
 
-# Context bar + usage are combined on a single line (see usage section below)
-
-# NOTE: usage_5h, usage_5h_reset populated by PARALLEL PREFETCH
-
+bar=$(render_context_bar $display_pct)
 usage_5h_int=${usage_5h%%.*}
 [ -z "$usage_5h_int" ] && usage_5h_int=0
 
-# Only show usage line if we have data (token was valid)
 if [ "$usage_5h_int" -gt 0 ] || [ -f "$USAGE_CACHE" ]; then
     usage_5h_color=$(get_usage_color "$usage_5h_int")
-
-    # Reset time: pre-computed in .sh cache or live computation
     if [ -n "$usage_5h_hour" ]; then
         reset_5h_time="$usage_5h_hour"
     elif [ -n "$usage_5h_reset" ]; then
@@ -588,20 +599,44 @@ if [ "$usage_5h_int" -gt 0 ] || [ -f "$USAGE_CACHE" ]; then
     else
         reset_5h_time="—"
     fi
-
-    usage_fmt="🔋${usage_5h_color}${usage_5h_int}%%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}"
-    bar=$(render_context_bar $display_pct)
-
-    # Combined line: Context + Usage + Rating
-    printf "🧮${bar} ${pct_color}${raw_pct}%%${RESET} ${usage_fmt}"
-    [ -n "$rating_suffix" ] && printf " ${SLATE_600}│${RESET} ${rating_suffix}"
-    printf "\n"
+    printf -v usage_full '%b' "🧮${bar} ${pct_color}${raw_pct}%${RESET} 🔋${usage_5h_color}${usage_5h_int}%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}"
+    printf -v usage_dense '%b' "🧮${pct_color}${raw_pct}%${RESET} 🔋${usage_5h_color}${usage_5h_int}%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}"
+    printf -v usage_ultra '%b' "🧮${pct_color}${raw_pct}%${RESET} 🔋${usage_5h_color}${usage_5h_int}%${RESET}"
 else
-    # No usage data — Context only
-    bar=$(render_context_bar $display_pct)
-    printf "🧮${bar} ${pct_color}${raw_pct}%%${RESET}"
-    [ -n "$rating_suffix" ] && printf " ${SLATE_600}│${RESET} ${rating_suffix}"
-    printf "\n"
+    printf -v usage_full '%b' "🧮${bar} ${pct_color}${raw_pct}%${RESET}"
+    printf -v usage_dense '%b' "🧮${pct_color}${raw_pct}%${RESET}"
+    printf -v usage_ultra '%b' "🧮${pct_color}${raw_pct}%${RESET}"
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# RENDER (pick largest density that fits terminal width)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+printf -v sep '%b' " ${SLATE_600}│${RESET} "
+
+# Compose lines at each density
+line1_full="${id_full}${sep}${sess_full}"
+line1_dense="${id_dense}${sep}${sess_dense}"
+line1_ultra="${id_ultra}${sep}${sess_ultra}"
+
+line2_full="${usage_full}"
+line2_dense="${usage_dense}"
+line2_ultra="${usage_ultra}"
+[ -n "$learn_full" ] && line2_full="${line2_full}${sep}${learn_full}"
+[ -n "$learn_dense" ] && line2_dense="${line2_dense}${sep}${learn_dense}"
+[ -n "$learn_ultra" ] && line2_ultra="${line2_ultra}${sep}${learn_ultra}"
+
+# Try full → dense → ultradense (pick largest that fits)
+_max_w=$(display_max_width "$line1_full" "$line2_full")
+if [ "$_max_w" -le "$term_width" ]; then
+    printf '%s\n%s\n' "$line1_full" "$line2_full"
+else
+    _max_w=$(display_max_width "$line1_dense" "$line2_dense")
+    if [ "$_max_w" -le "$term_width" ]; then
+        printf '%s\n%s\n' "$line1_dense" "$line2_dense"
+    else
+        printf '%s\n%s\n' "$line1_ultra" "$line2_ultra"
+    fi
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
