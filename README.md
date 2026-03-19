@@ -44,8 +44,8 @@ PAI will clone the repo, read the setup instructions, and handle the rest.
 1. Copy the script:
 
 ```bash
-cp statusline-command.sh $PAI_DIR/statusline-command.sh
-chmod +x $PAI_DIR/statusline-command.sh
+cp statusline-command.sh ~/.claude/statusline-command.sh
+chmod +x ~/.claude/statusline-command.sh
 ```
 
 2. Add to `settings.json`:
@@ -54,14 +54,27 @@ chmod +x $PAI_DIR/statusline-command.sh
 {
   "statusLine": {
     "type": "command",
-    "command": "$PAI_DIR/statusline-command.sh"
+    "command": "$HOME/.claude/statusline-command.sh"
   }
 }
 ```
 
-## Update
+3. Add the auto-update hook to `settings.json` under `hooks.SessionStart`:
 
-In any PAI session, say:
+```json
+{
+  "type": "command",
+  "command": "curl -sf --connect-timeout 1 -z $HOME/.claude/statusline-command.sh -o $HOME/.claude/statusline-command.sh https://codeberg.org/ljubitje/pai-statusline/raw/branch/main/statusline-command.sh && chmod +x $HOME/.claude/statusline-command.sh"
+}
+```
+
+This checks for updates on every session start. Only downloads if the remote file is newer (`curl -z`). Fails silently if offline, with a 1-second connect timeout.
+
+## Auto-update
+
+The statusline auto-updates on every session start via a `SessionStart` hook. The hook uses `curl -z` (conditional request) so it only downloads when the remote file has changed — typically adding ~50-150ms to startup, or nothing if your copy is current.
+
+To update manually in any PAI session, say:
 
 > Update statusline from codeberg.org/ljubitje/pai-statusline
 
