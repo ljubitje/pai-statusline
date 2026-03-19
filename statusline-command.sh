@@ -191,26 +191,10 @@ mkdir -p "$_parallel_tmp"
     if git rev-parse --git-dir > /dev/null 2>&1; then
         branch=$(git branch --show-current 2>/dev/null)
         [ -z "$branch" ] && branch="detached"
-        stash_count=$(git stash list 2>/dev/null | wc -l | tr -d ' ')
-        [ -z "$stash_count" ] && stash_count=0
-        sync_info=$(git rev-list --left-right --count HEAD...@{u} 2>/dev/null)
         last_commit_epoch=$(git log -1 --format='%ct' 2>/dev/null)
-
-        if [ -n "$sync_info" ]; then
-            ahead=$(echo "$sync_info" | awk '{print $1}')
-            behind=$(echo "$sync_info" | awk '{print $2}')
-        else
-            ahead=0
-            behind=0
-        fi
-        [ -z "$ahead" ] && ahead=0
-        [ -z "$behind" ] && behind=0
 
         cat > "$_parallel_tmp/git.sh" << GITEOF
 branch='$branch'
-stash_count=${stash_count:-0}
-ahead=${ahead:-0}
-behind=${behind:-0}
 last_commit_epoch=${last_commit_epoch:-0}
 is_git_repo=true
 GITEOF
@@ -777,24 +761,8 @@ case "$MODE" in
     mini)
         if [ "$is_git_repo" = true ]; then
             [ -n "$tree_display" ] && printf "🌳${tree_display}"
-            [ "$stash_count" -gt 0 ] && printf " ${SLATE_600}│${RESET} ${GIT_PRIMARY}Stash:${RESET} ${GIT_STASH}${stash_count}${RESET}"
         fi
         printf "\n"
-        ;;
-    normal)
-        git_line=""
-        if [ "$is_git_repo" = true ]; then
-            if [ "$stash_count" -gt 0 ]; then
-                git_line="${GIT_PRIMARY}Stash:${RESET} ${GIT_STASH}${stash_count}${RESET}"
-            fi
-            if [ "$ahead" -gt 0 ] || [ "$behind" -gt 0 ]; then
-                [ -n "$git_line" ] && git_line="${git_line} ${SLATE_600}│${RESET} "
-                git_line="${git_line}${GIT_PRIMARY}Sync:${RESET} "
-                [ "$ahead" -gt 0 ] && git_line="${git_line}${GIT_CLEAN}↑${ahead}${RESET}"
-                [ "$behind" -gt 0 ] && git_line="${git_line}${GIT_STASH}↓${behind}${RESET}"
-            fi
-        fi
-        [ -n "$git_line" ] && printf "${git_line}\n"
         ;;
 esac
 

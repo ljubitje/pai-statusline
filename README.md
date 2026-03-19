@@ -6,21 +6,20 @@ Dense 2-line personal statusline for [PAI](https://github.com/danielmiessler/pai
 
 | Section | Symbol | Example | Info |
 |---------|--------|---------|------|
-| Header | PAI | `4.0.3` | PAI version |
-| | CC | `1.0.32` | Claude Code version |
-| | ⬤ | `ok` | Claude Code service status |
-| | ⏳ | `1h23m` | Session wall-clock time |
-| | 📍 | `myproject` | Current directory |
-| | 🌳 | `clean` | Git tree state (clean/staged/unstaged/untracked) |
-| Git | Stash: | `2` | Git stash count |
-| | Sync: | `↑2↓1` | Commits ahead/behind remote |
-| Context | 🧮 | `▅▅▅▅▁▁▁▁▁▁ 42%` | Gradient context bar + percentage |
-| Usage | 🔋 | `65%` | 5-hour utilization |
-| | 🔄 | `15:30` | Usage reset time (local clock) |
-| Learning | ⭐ | `12` | Total ratings count |
-| | 🧠 | `7.1` | All-time average + sparkline |
-| | ✨ | `8 (exp)` | Latest rating + source |
-| | 🔎 | `3` | Research count |
+| Header | <span style="color:rgb(30,58,138)">P</span><span style="color:rgb(59,130,246)">A</span><span style="color:rgb(147,197,253)">I</span> | 4.0.3 | PAI version |
+| | <span style="color:rgb(217,119,87)">C</span><span style="color:rgb(191,87,59)">C</span> | 2.1.70 | Claude Code version |
+| | <span style="color:rgb(70,175,95)">⬤</span> | ok | Claude Code service status |
+| | ⏳ | 1h23m | Session wall-clock time |
+| | 📍 | myproject | Current directory |
+| | 🌳 | <span style="color:rgb(74,222,128)">clean</span> | Git tree state (clean/staged/unstaged/untracked) |
+| Context | 🧮 | <span style="color:rgb(70,175,95)">▅▅▅▅</span><span style="color:rgb(99,99,99)">▁▁▁▁▁▁</span> <span style="color:rgb(70,175,95)">42%</span> | Context window usage |
+| Usage | 🔋 | <span style="color:rgb(150,190,40)">65%</span> | 5-hour utilization |
+| | 🔄 | 15:30 | Reset time (local clock) |
+| Learning | ⭐ | 12 | Total ratings count |
+| | 🧠 | <span style="color:rgb(150,190,40)">7.1</span> | All-time average |
+| | | <span style="color:rgb(150,190,40)">▄</span><span style="color:rgb(255,193,7)">▃</span><span style="color:rgb(150,190,40)">▄</span><span style="color:rgb(70,175,95)">▅</span><span style="color:rgb(255,193,7)">▃</span><span style="color:rgb(150,190,40)">▄▄</span><span style="color:rgb(255,193,7)">▃</span><span style="color:rgb(70,175,95)">▅</span><span style="color:rgb(150,190,40)">▄</span><span style="color:rgb(255,193,7)">▃</span><span style="color:rgb(150,190,40)">▄</span><span style="color:rgb(235,130,45)">▂</span><span style="color:rgb(255,193,7)">▃</span><span style="color:rgb(150,190,40)">▄▄</span> | Rating sparkline (last 16) |
+| | ✨ | <span style="color:rgb(150,190,40)">8</span> (exp) | Latest rating + source |
+| | 🔎 | 3 | Research count |
 
 ## Responsive modes
 
@@ -35,13 +34,13 @@ Adapts to terminal width automatically:
 
 ## Installation
 
-### Via PAI
+### Via PAI (recommended)
 
 In any PAI session, say:
 
 > Install codeberg.org/ljubitje/pai-statusline
 
-PAI/CC will clone the repo, read the setup instructions, and handle the rest.
+PAI will clone the repo, read the setup instructions, and handle the rest.
 
 ### Manual
 
