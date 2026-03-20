@@ -612,7 +612,7 @@ if [ "$usage_5h_int" -gt 0 ] || [ -f "$USAGE_CACHE" ]; then
     else usage_5h_color="$TEXT_GREEN"
     fi
     battery_icon="🔋"
-    [ "$usage_5h_remaining" -le 10 ] && battery_icon="🪫"
+    [ "$usage_5h_remaining" -lt 20 ] && battery_icon="🪫"
     if [ -n "$usage_5h_reset" ]; then
         reset_5h_time=$(format_reset_countdown "$usage_5h_reset")
     else
