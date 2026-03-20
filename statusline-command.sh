@@ -359,7 +359,7 @@ if [ -f "$RATINGS_FILE" ] && [ -s "$RATINGS_FILE" ]; then
         _sc_orange=$(_rgb "$SCALE_ORANGE")
         _sc_red=$(_rgb "$SCALE_RED")
         _sc_empty=$(_rgb "$SLATE_600")
-        eval "$(grep '^{' "$RATINGS_FILE" | jq -rs --argjson now "$now" \
+        eval "$(grep -a '^{' "$RATINGS_FILE" | jq -rs --argjson now "$now" \
           --arg sc_green "$_sc_green" --arg sc_lime "$_sc_lime" --arg sc_yellow "$_sc_yellow" \
           --arg sc_orange "$_sc_orange" --arg sc_red "$_sc_red" --arg sc_empty "$_sc_empty" '
       # Parse ISO timestamp to epoch (handles timezone offsets)
