@@ -600,19 +600,27 @@ fi
 bar=$(render_context_bar $display_pct)
 usage_5h_int=${usage_5h%%.*}
 [ -z "$usage_5h_int" ] && usage_5h_int=0
+usage_5h_remaining=$((100 - usage_5h_int))
+[ "$usage_5h_remaining" -lt 0 ] && usage_5h_remaining=0
 
 if [ "$usage_5h_int" -gt 0 ] || [ -f "$USAGE_CACHE" ]; then
-    usage_5h_color=$(get_usage_color "$usage_5h_int")
+    # Color based on remaining: low remaining = red, high remaining = green
+    if   [ "$usage_5h_remaining" -le 10 ]; then usage_5h_color="$TEXT_RED"
+    elif [ "$usage_5h_remaining" -le 20 ]; then usage_5h_color="$TEXT_ORANGE"
+    elif [ "$usage_5h_remaining" -le 30 ]; then usage_5h_color="$TEXT_YELLOW"
+    elif [ "$usage_5h_remaining" -le 50 ]; then usage_5h_color="$TEXT_LIME"
+    else usage_5h_color="$TEXT_GREEN"
+    fi
     battery_icon="🔋"
-    [ "$usage_5h_int" -ge 90 ] && battery_icon="🪫"
+    [ "$usage_5h_remaining" -le 10 ] && battery_icon="🪫"
     if [ -n "$usage_5h_reset" ]; then
         reset_5h_time=$(format_reset_countdown "$usage_5h_reset")
     else
         reset_5h_time="—"
     fi
-    printf -v usage_full '%b' "🧮${bar} ${pct_color}${raw_pct}%${RESET} ${battery_icon}${usage_5h_color}${usage_5h_int}%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}"
-    printf -v usage_dense '%b' "🧮${pct_color}${raw_pct}%${RESET} ${battery_icon}${usage_5h_color}${usage_5h_int}%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}"
-    printf -v usage_ultra '%b' "🧮${pct_color}${raw_pct}%${RESET} ${battery_icon}${usage_5h_color}${usage_5h_int}%${RESET}"
+    printf -v usage_full '%b' "🧮${bar} ${pct_color}${raw_pct}%${RESET} ${battery_icon}${usage_5h_color}${usage_5h_remaining}%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}"
+    printf -v usage_dense '%b' "🧮${pct_color}${raw_pct}%${RESET} ${battery_icon}${usage_5h_color}${usage_5h_remaining}%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}"
+    printf -v usage_ultra '%b' "🧮${pct_color}${raw_pct}%${RESET} ${battery_icon}${usage_5h_color}${usage_5h_remaining}%${RESET}"
 else
     printf -v usage_full '%b' "🧮${bar} ${pct_color}${raw_pct}%${RESET}"
     printf -v usage_dense '%b' "🧮${pct_color}${raw_pct}%${RESET}"
