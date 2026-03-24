@@ -292,22 +292,18 @@ format_reset_countdown() {
     fi
 }
 
-# Render context bar - gradient progress bar (always 10 buckets)
+# Render context bar - gradient progress bar (5 buckets, each = 20%)
+# Colors: 1=green 2=lime 3=yellow 4=orange 5=red
 render_context_bar() {
     local pct=$1
     local output=""
-    local filled=$((pct * 10 / 100))
+    local filled=$((pct * 5 / 100))
     [ "$filled" -lt 0 ] && filled=0
-    local i
-    for i in 1 2 3 4 5 6 7 8 9 10; do
-        if [ "$i" -le "$filled" ]; then
-            local pos_pct=$((i * 10))
-            if [ "$pos_pct" -ge 90 ]; then output="${output}${SCALE_RED}▅${RESET}"
-            elif [ "$pos_pct" -ge 80 ]; then output="${output}${SCALE_ORANGE}▅${RESET}"
-            elif [ "$pos_pct" -ge 70 ]; then output="${output}${SCALE_YELLOW}▅${RESET}"
-            elif [ "$pos_pct" -ge 50 ]; then output="${output}${SCALE_LIME}▅${RESET}"
-            else output="${output}${SCALE_GREEN}▅${RESET}"
-            fi
+    local i colors
+    colors=("$SCALE_GREEN" "$SCALE_LIME" "$SCALE_YELLOW" "$SCALE_ORANGE" "$SCALE_RED")
+    for i in 0 1 2 3 4; do
+        if [ $((i + 1)) -le "$filled" ]; then
+            output="${output}${colors[$i]}▅${RESET}"
         else
             output="${output}${CTX_BUCKET_EMPTY}▁${RESET}"
         fi
@@ -438,7 +434,7 @@ if [ -f "$RATINGS_FILE" ] && [ -s "$RATINGS_FILE" ]; then
         ] | join("");
 
       # Last 16 ratings sparkline, padded with underscores for empty slots
-      (10 as $cap |
+      (5 as $cap |
         (if length > $cap then .[-$cap:] else . end) as $recent |
         [range($cap - ($recent | length)) | null] + $recent |
         map(if . == null then "\u001b[38;2;\($sc_empty | gsub(",";";"))m▁\u001b[0m" else .rating | to_bar end) |
