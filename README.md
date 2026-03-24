@@ -8,8 +8,8 @@ Dense 2-line personal statusline for [PAI](https://github.com/danielmiessler/pai
 
 | Section | Symbol | Example | Info |
 |---------|--------|---------|------|
-| Identity | <span style="color:rgb(30,58,138)">P</span><span style="color:rgb(59,130,246)">A</span><span style="color:rgb(147,197,253)">I</span> | 4.0.3 | PAI version |
-| | <span style="color:rgb(217,119,87)">C</span><span style="color:rgb(191,87,59)">C</span> | 2.1.70 | Claude Code version |
+| Identity | <span style="color:rgb(30,58,138)">P</span><span style="color:rgb(59,130,246)">A</span><span style="color:rgb(147,197,253)">I</span> | 4.0.3 | PAI version (hidden if latest, outdated segments dimmed) |
+| | <span style="color:rgb(217,119,87)">C</span><span style="color:rgb(191,87,59)">C</span> | 2.1.<span style="color:rgb(99,99,99)">70</span> | Claude Code version (hidden if latest, outdated segments dimmed) |
 | | <span style="color:rgb(70,175,95)">⬤</span> | ok | Claude Code status |
 | Session | ⏳ | 1h23m | Session time |
 | | 📍 | myproject | Starting directory |
@@ -101,7 +101,7 @@ The script receives JSON from Claude Code via stdin containing session data (con
 3. Sources pre-built `.sh` caches for usage and service status (instant, no parsing)
 4. Detects terminal width and picks the largest density that fits (full → dense → ultradense)
 5. Renders four sections: Identity, Session, Usage, Learning
-6. Fire-and-forget: refreshes usage/status caches in background for next render
+6. Fire-and-forget: refreshes usage/status/version caches in background for next render
 
 Typical render time: ~100ms.
 

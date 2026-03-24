@@ -193,6 +193,44 @@ PAI_I='\033[38;2;147;197;253m'        # Light blue
 CC_C1='\033[38;2;217;119;87m'         # Claude terracotta/coral
 CC_C2='\033[38;2;191;87;59m'          # Claude darker warm brown
 
+# Version outdated dim (matches pipe separator color)
+VERSION_DIM="$SLATE_600"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# VERSION LATEST CHECK (cached by fire-and-forget block)
+# ─────────────────────────────────────────────────────────────────────────────
+VERSION_CACHE_SH="$PAI_DIR/MEMORY/STATE/version-cache.sh"
+cc_latest=""; pai_latest=""
+[ -f "$VERSION_CACHE_SH" ] && source "$VERSION_CACHE_SH"
+
+# Format version: hide if latest, dim outdated segments if not
+# Usage: format_version_display <current> <latest> <normal_color>
+# Returns: empty string if latest, colored string if outdated
+format_version_display() {
+    local cur="${1#v}" lat="${2#v}" normal="$3"
+    [ -z "$lat" ] && { printf ' %b%s%b' "$normal" "$1" "$RESET"; return; }
+    [ "$cur" = "$lat" ] && return  # latest — hide
+    IFS='.' read -ra c_parts <<< "$cur"
+    IFS='.' read -ra l_parts <<< "$lat"
+    local diverge=-1 i max=${#c_parts[@]}
+    [ ${#l_parts[@]} -gt $max ] && max=${#l_parts[@]}
+    for ((i=0; i<max; i++)); do
+        [ "${c_parts[$i]:-0}" != "${l_parts[$i]:-0}" ] && { diverge=$i; break; }
+    done
+    [ $diverge -eq -1 ] && return  # match
+    # Build output: matching segments in normal color, outdated in dim
+    printf ' %b' "$normal"
+    for ((i=0; i<${#c_parts[@]}; i++)); do
+        [ $i -gt 0 ] && printf '.'
+        [ $i -eq $diverge ] && printf '%b' "$VERSION_DIM"
+        printf '%s' "${c_parts[$i]}"
+    done
+    printf '%b' "$RESET"
+}
+
+pai_ver_display=$(format_version_display "$PAI_VERSION" "$pai_latest" "$SLATE_500")
+cc_ver_display=$(format_version_display "$cc_version" "$cc_latest" "$SLATE_500")
+
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPER FUNCTIONS
 # ─────────────────────────────────────────────────────────────────────────────
@@ -570,8 +608,9 @@ esac
 _status_display=" ${_status_color}${_status_icon}${RESET} ${SLATE_400}${claude_status_desc:-fetch failed}${RESET}"
 
 # IDENTITY (PAI version, CC version, Claude Code status)
-printf -v id_full '%b' "${PAI_P}P${PAI_A}A${PAI_I}I${RESET} ${SLATE_500}${PAI_VERSION}${RESET} ${CC_C1}C${CC_C2}C${RESET} ${SLATE_500}${cc_version}${RESET}${_status_display}"
-printf -v id_dense '%b' "${PAI_P}P${PAI_A}A${PAI_I}I${RESET}/${CC_C1}C${CC_C2}C${RESET}${_status_display}"
+# Version displays: empty if latest, space+dimmed if outdated
+printf -v id_full '%b' "${PAI_P}P${PAI_A}A${PAI_I}I${RESET}${pai_ver_display} ${SLATE_600}│${RESET} ${CC_C1}C${CC_C2}C${RESET}${cc_ver_display}${_status_display}"
+printf -v id_dense '%b' "${PAI_P}P${PAI_A}A${PAI_I}I${RESET} ${SLATE_600}│${RESET} ${CC_C1}C${CC_C2}C${RESET}${cc_ver_display}${_status_display}"
 printf -v id_ultra '%b' "${CC_C1}C${CC_C2}C${RESET}${_status_display}"
 
 # SESSION (session time, starting directory, git tree state)
@@ -725,6 +764,18 @@ if ! [ -f "$_bg_lock" ] || [ $(($(date +%s) - $(get_mtime "$_bg_lock"))) -gt 10 
                     *)           _s_desc="unknown" ;;
                 esac
                 printf "claude_status_indicator='%s'\nclaude_status_desc='%s'\n" "$_s_ind" "$_s_desc" > "$PAI_DIR/MEMORY/STATE/status-cache.sh"
+            fi
+        fi
+
+        # Latest version cache refresh (CC from npm, PAI from GitHub)
+        _ver_age=999999
+        [ -f "$VERSION_CACHE_SH" ] && _ver_age=$(($(date +%s) - $(get_mtime "$VERSION_CACHE_SH")))
+        if [ "$_ver_age" -gt 3600 ]; then
+            _cc_lat=$(curl -s --max-time 3 "https://registry.npmjs.org/@anthropic-ai/claude-code/latest" 2>/dev/null | jq -r '.version // empty' 2>/dev/null)
+            _pai_lat=$(curl -sL --max-time 3 "https://api.github.com/repos/danielmiessler/PAI/releases/latest" 2>/dev/null | jq -r '.tag_name // empty' 2>/dev/null)
+            _pai_lat="${_pai_lat#v}"  # strip leading v
+            if [ -n "$_cc_lat" ] || [ -n "$_pai_lat" ]; then
+                printf "cc_latest='%s'\npai_latest='%s'\n" "${_cc_lat:-}" "${_pai_lat:-}" > "$VERSION_CACHE_SH" 2>/dev/null
             fi
         fi
 
