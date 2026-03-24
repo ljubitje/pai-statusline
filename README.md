@@ -17,7 +17,7 @@ Dense 2-line personal statusline for [PAI](https://github.com/danielmiessler/pai
 | Usage | 🧮 | <span style="color:rgb(70,175,95)">▅</span><span style="color:rgb(150,190,40)">▅</span><span style="color:rgb(255,193,7)">▅</span><span style="color:rgb(99,99,99)">▁▁</span> <span style="color:rgb(255,193,7)">65%</span> | Context bar (5 buckets) + % |
 | | 🔋 | <span style="color:rgb(150,190,40)">65%</span> | 5-hour budget remaining % |
 | | 🔄 | 3h30m | Time to reset (countdown) |
-| Learning | 🧠 | <span style="color:rgb(150,190,40)">7.1</span> <span style="color:rgb(150,190,40)">▄</span><span style="color:rgb(255,193,7)">▃</span><span style="color:rgb(150,190,40)">▄</span><span style="color:rgb(70,175,95)">▅</span><span style="color:rgb(255,193,7)">▃</span><span style="color:rgb(150,190,40)">▄▄</span><span style="color:rgb(255,193,7)">▃</span><span style="color:rgb(70,175,95)">▅</span><span style="color:rgb(150,190,40)">▄</span> | Average rating + ratings bar (last 10) |
+| Learning | 🧠 | <span style="color:rgb(150,190,40)">7.1</span> <span style="color:rgb(150,190,40)">▄</span><span style="color:rgb(255,193,7)">▃</span><span style="color:rgb(150,190,40)">▄</span><span style="color:rgb(70,175,95)">▅</span><span style="color:rgb(150,190,40)">▄</span> | Average rating + ratings bar (last 5) |
 | | ✨ | <span style="color:rgb(150,190,40)">8</span> (exp) | Last rating |
 | | ⭐ | 12 | Ratings count |
 
