@@ -5,7 +5,7 @@
 #
 # Dense 2-line statusline for PAI + Claude Code.
 # Four sections: Identity, Session, Usage, Learning.
-# Context percentage scales to compaction threshold if configured in settings.json.
+# Context shown as moon phase (🌑→🌕) scaled to compaction threshold if configured.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 set -o pipefail
@@ -183,9 +183,6 @@ GIT_AGE_RECENT='\033[38;2;96;165;250m'
 GIT_AGE_STALE='\033[38;2;59;130;246m'
 GIT_AGE_OLD='\033[38;2;99;102;241m'
 
-# Context bar
-CTX_BUCKET_EMPTY='\033[38;2;99;99;99m'
-
 # PAI branding
 PAI_P='\033[38;2;30;58;138m'          # Navy
 PAI_A='\033[38;2;59;130;246m'         # Medium blue
@@ -292,23 +289,16 @@ format_reset_countdown() {
     fi
 }
 
-# Render context bar - gradient progress bar (5 buckets, each = 20%)
-# Colors: 1=green 2=lime 3=yellow 4=orange 5=red
-render_context_bar() {
+# Context moon phase indicator (5 levels)
+# 🌑=empty 🌘=low 🌗=half 🌖=high 🌕=full
+context_moon() {
     local pct=$1
-    local output=""
-    local filled=$((pct * 5 / 100))
-    [ "$filled" -lt 0 ] && filled=0
-    local i colors
-    colors=("$SCALE_GREEN" "$SCALE_LIME" "$SCALE_YELLOW" "$SCALE_ORANGE" "$SCALE_RED")
-    for i in 0 1 2 3 4; do
-        if [ $((i + 1)) -le "$filled" ]; then
-            output="${output}${colors[$i]}▅${RESET}"
-        else
-            output="${output}${CTX_BUCKET_EMPTY}▁${RESET}"
-        fi
-    done
-    echo "$output"
+    if   [ "$pct" -ge 80 ]; then echo "🌕"
+    elif [ "$pct" -ge 60 ]; then echo "🌖"
+    elif [ "$pct" -ge 40 ]; then echo "🌗"
+    elif [ "$pct" -ge 20 ]; then echo "🌘"
+    else echo "🌑"
+    fi
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -530,11 +520,12 @@ CACHE_EOF
     if [ "$total_count" -gt 0 ] 2>/dev/null; then
         ALL_COLOR=$(get_rating_color "$all_avg")
         LATEST_COLOR=$(get_rating_color "${latest:-5}")
-        [ "$latest_source" = "explicit" ] && src_label="exp" || src_label="imp"
+        [ "$latest_source" = "explicit" ] && src_suffix="e" || src_suffix="i"
+        [ "$hour_avg" != "—" ] && star_icon="🌟" || star_icon="⭐"
 
         # Build Learning at 3 densities
-        printf -v learn_full '%b' "🧠${ALL_COLOR}${all_avg}${RESET} ${all_sparkline} ✨${LATEST_COLOR}${latest}${RESET} ${SLATE_300}(${src_label})${RESET} ⭐${SLATE_300}${ratings_count}${RESET}"
-        printf -v learn_dense '%b' "🧠${ALL_COLOR}${all_avg}${RESET} ✨${LATEST_COLOR}${latest}${RESET} ⭐${SLATE_300}${ratings_count}${RESET}"
+        printf -v learn_full '%b' "🧠${ALL_COLOR}${all_avg}${RESET} ${all_sparkline} ✨${LATEST_COLOR}${latest}${src_suffix}${RESET} ${star_icon}${SLATE_300}${ratings_count}${RESET}"
+        printf -v learn_dense '%b' "🧠${ALL_COLOR}${all_avg}${RESET} ✨${LATEST_COLOR}${latest}${src_suffix}${RESET} ${star_icon}${SLATE_300}${ratings_count}${RESET}"
         printf -v learn_ultra '%b' "🧠${ALL_COLOR}${all_avg}${RESET}"
     else
         # No ratings yet — show placeholder
@@ -632,7 +623,7 @@ elif [ "$display_pct" -ge 50 ]; then pct_color="$TEXT_LIME"
 else pct_color="$TEXT_GREEN"
 fi
 
-bar=$(render_context_bar $display_pct)
+moon=$(context_moon $display_pct)
 usage_5h_int=${usage_5h%%.*}
 [ -z "$usage_5h_int" ] && usage_5h_int=0
 usage_5h_remaining=$((100 - usage_5h_int))
@@ -653,13 +644,13 @@ if [ "$usage_5h_int" -gt 0 ] || [ -f "$USAGE_CACHE" ]; then
     else
         reset_5h_time="—"
     fi
-    printf -v usage_full '%b' "🧮${bar} ${pct_color}${raw_pct}%${RESET} ${battery_icon}${usage_5h_color}${usage_5h_remaining}%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}"
-    printf -v usage_dense '%b' "🧮${pct_color}${raw_pct}%${RESET} ${battery_icon}${usage_5h_color}${usage_5h_remaining}%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}"
-    printf -v usage_ultra '%b' "🧮${pct_color}${raw_pct}%${RESET} ${battery_icon}${usage_5h_color}${usage_5h_remaining}%${RESET}"
+    printf -v usage_full '%b' "${moon}${pct_color}${raw_pct}%${RESET} ${battery_icon}${usage_5h_color}${usage_5h_remaining}%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}"
+    printf -v usage_dense '%b' "${moon}${pct_color}${raw_pct}%${RESET} ${battery_icon}${usage_5h_color}${usage_5h_remaining}%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}"
+    printf -v usage_ultra '%b' "${moon}${pct_color}${raw_pct}%${RESET} ${battery_icon}${usage_5h_color}${usage_5h_remaining}%${RESET}"
 else
-    printf -v usage_full '%b' "🧮${bar} ${pct_color}${raw_pct}%${RESET}"
-    printf -v usage_dense '%b' "🧮${pct_color}${raw_pct}%${RESET}"
-    printf -v usage_ultra '%b' "🧮${pct_color}${raw_pct}%${RESET}"
+    printf -v usage_full '%b' "${moon}${pct_color}${raw_pct}%${RESET}"
+    printf -v usage_dense '%b' "${moon}${pct_color}${raw_pct}%${RESET}"
+    printf -v usage_ultra '%b' "${moon}${pct_color}${raw_pct}%${RESET}"
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════════

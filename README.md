@@ -14,12 +14,12 @@ Dense 2-line personal statusline for [PAI](https://github.com/danielmiessler/pai
 | Session | ⏳ | 1h23m | Session time |
 | | 📍 | myproject | Starting directory |
 | | 🌳 | <span style="color:rgb(74,222,128)">clean</span> | Git tree state |
-| Usage | 🧮 | <span style="color:rgb(70,175,95)">▅</span><span style="color:rgb(150,190,40)">▅</span><span style="color:rgb(255,193,7)">▅</span><span style="color:rgb(99,99,99)">▁▁</span> <span style="color:rgb(255,193,7)">65%</span> | Context bar (5 buckets) + % |
+| Usage | 🌑🌘🌗🌖🌕 | <span style="color:rgb(255,193,7)">65%</span> | Context moon phase + % (fills as context grows) |
 | | 🔋 | <span style="color:rgb(150,190,40)">65%</span> | 5-hour budget remaining % |
 | | 🔄 | 3h30m | Time to reset (countdown) |
 | Learning | 🧠 | <span style="color:rgb(150,190,40)">7.1</span> <span style="color:rgb(150,190,40)">▄</span><span style="color:rgb(255,193,7)">▃</span><span style="color:rgb(150,190,40)">▄</span><span style="color:rgb(70,175,95)">▅</span><span style="color:rgb(150,190,40)">▄</span> | Average rating + ratings bar (last 5) |
-| | ✨ | <span style="color:rgb(150,190,40)">8</span> (exp) | Last rating |
-| | ⭐ | 12 | Ratings count |
+| | ✨ | <span style="color:rgb(150,190,40)">8</span>i | Last rating (i=implicit, e=explicit) |
+| | ⭐/🌟 | 12 | Ratings count (🌟 if rated in last hour) |
 
 ## Automatic resizing
 
@@ -87,7 +87,7 @@ The statusline reads configuration from `settings.json`:
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `contextDisplay.compactionThreshold` | `100` | Scale context bar so this % = 100%. Set to `62` if your compaction triggers at 62%. |
+| `contextDisplay.compactionThreshold` | `100` | Scale context % so this threshold = 100%. Set to `62` if your compaction triggers at 62%. |
 | `principal.timezone` | `UTC` | Your timezone for reset time display (e.g., `America/New_York`) |
 | `pai.version` | `--` | PAI version string |
 | `counts.ratings` | `0` | Total ratings count (populated by PAI stop hooks) |
