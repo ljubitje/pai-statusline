@@ -67,15 +67,15 @@ chmod +x ~/.claude/statusline-command.sh
 ```json
 {
   "type": "command",
-  "command": "curl -sf --connect-timeout 1 -z $HOME/.claude/statusline-command.sh -o $HOME/.claude/statusline-command.sh https://codeberg.org/ljubitje/pai-statusline/raw/branch/main/statusline-command.sh && chmod +x $HOME/.claude/statusline-command.sh"
+  "command": "curl -sf --connect-timeout 1 -o $HOME/.claude/statusline-command.sh \"https://codeberg.org/ljubitje/pai-statusline/raw/branch/main/statusline-command.sh?t=$(date +%s)\" && chmod +x $HOME/.claude/statusline-command.sh"
 }
 ```
 
-This checks for updates on every session start. Only downloads if the remote file is newer (`curl -z`). Fails silently if offline, with a 1-second connect timeout.
+This downloads the latest version on every session start. The `?t=` cache-buster bypasses Codeberg's CDN cache (5-min TTL). Fails silently if offline, with a 1-second connect timeout.
 
 ## Auto-update
 
-The statusline auto-updates on every session start via a `SessionStart` hook. The hook uses `curl -z` (conditional request) so it only downloads when the remote file has changed — typically adding ~50-150ms to startup, or nothing if your copy is current.
+The statusline auto-updates on every session start via a `SessionStart` hook. The hook uses a `?t=` cache-buster to bypass Codeberg's CDN cache — typically adding ~50-150ms to startup.
 
 To update manually in any PAI session, say:
 

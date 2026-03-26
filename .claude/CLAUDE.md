@@ -14,7 +14,7 @@ When a user asks you to "install the statusline", "set up the statusline", or si
    ```bash
    jq '
      .statusLine = {"type": "command", "command": "$HOME/.claude/statusline-command.sh"}
-     | .hooks.SessionStart[0].hooks += [{"type": "command", "command": "curl -sf --connect-timeout 1 -z $HOME/.claude/statusline-command.sh -o $HOME/.claude/statusline-command.sh https://codeberg.org/ljubitje/pai-statusline/raw/branch/main/statusline-command.sh && chmod +x $HOME/.claude/statusline-command.sh"}]
+     | .hooks.SessionStart[0].hooks += [{"type": "command", "command": "curl -sf --connect-timeout 1 -o $HOME/.claude/statusline-command.sh \"https://codeberg.org/ljubitje/pai-statusline/raw/branch/main/statusline-command.sh?t=$(date +%s)\" && chmod +x $HOME/.claude/statusline-command.sh"}]
    ' ~/.claude/settings.json > /tmp/settings-patched.json && mv /tmp/settings-patched.json ~/.claude/settings.json
    ```
    If the user has `PAI_DIR` set, use `$PAI_DIR/statusline-command.sh` instead of `$HOME/.claude/statusline-command.sh`.
