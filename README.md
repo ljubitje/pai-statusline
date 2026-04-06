@@ -47,27 +47,38 @@ PAI will clone the repo, read the setup instructions, and handle the rest.
 1. Copy the script:
 
 ```bash
+mkdir -p ~/.claude
 cp statusline-command.sh ~/.claude/statusline-command.sh
 chmod +x ~/.claude/statusline-command.sh
 ```
 
-2. Add to `settings.json`:
+2. Add to `~/.claude/settings.json` (create the file with `{}` if it doesn't exist):
 
 ```json
 {
   "statusLine": {
     "type": "command",
-    "command": "$HOME/.claude/statusline-command.sh"
+    "command": "~/.claude/statusline-command.sh"
   }
 }
 ```
 
-3. Add the auto-update hook to `settings.json` under `hooks.SessionStart`:
+3. Add the auto-update hook to `~/.claude/settings.json` under `hooks.SessionStart`:
 
 ```json
 {
-  "type": "command",
-  "command": "curl -sf --connect-timeout 1 -o $HOME/.claude/statusline-command.sh \"https://codeberg.org/ljubitje/pai-statusline/raw/branch/main/statusline-command.sh?t=$(date +%s)\" && chmod +x $HOME/.claude/statusline-command.sh"
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -sf --connect-timeout 1 -o ~/.claude/statusline-command.sh \"https://codeberg.org/ljubitje/pai-statusline/raw/branch/main/statusline-command.sh?t=$(date +%s)\" && chmod +x ~/.claude/statusline-command.sh"
+          }
+        ]
+      }
+    ]
+  }
 }
 ```
 
