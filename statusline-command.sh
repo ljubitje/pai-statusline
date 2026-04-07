@@ -38,25 +38,36 @@ get_mtime() {
 
 input=$(cat)
 
-# Extract all settings + counts in a single jq call (was 4 separate calls, then 2)
-eval "$(jq -r '
-  "USER_TZ=" + (.principal.timezone // "UTC" | @sh) + "\n" +
-  "PAI_VERSION=" + (.pai.version // "—" | @sh) + "\n" +
-  "COMPACTION_THRESHOLD=" + (.contextDisplay.compactionThreshold // 100 | tostring) + "\n" +
-  "ratings_count=" + (.counts.ratings // 0 | tostring)
-' "$SETTINGS_FILE" 2>/dev/null)"
+# Extract all settings + counts in a single jq call (safe: no eval)
+{
+  IFS= read -r USER_TZ
+  IFS= read -r PAI_VERSION
+  IFS= read -r COMPACTION_THRESHOLD
+  IFS= read -r ratings_count
+} < <(jq -r '
+  (.principal.timezone // "UTC"),
+  (.pai.version // "—"),
+  (.contextDisplay.compactionThreshold // 100 | tostring),
+  (.counts.ratings // 0 | tostring)
+' "$SETTINGS_FILE" 2>/dev/null)
 USER_TZ="${USER_TZ:-UTC}"
 PAI_VERSION="${PAI_VERSION:-—}"
 COMPACTION_THRESHOLD="${COMPACTION_THRESHOLD:-100}"
 
-# Extract all data from JSON in single jq call
-eval "$(echo "$input" | jq -r '
-  "current_dir=" + (.workspace.current_dir // .cwd // "." | @sh) + "\n" +
-  "session_id=" + (.session_id // "" | @sh) + "\n" +
-  "model_name=" + (.model.display_name // "unknown" | @sh) + "\n" +
-  "cc_version_json=" + (.version // "" | @sh) + "\n" +
-  "context_pct=" + (.context_window.used_percentage // 0 | tostring)
-' 2>/dev/null)"
+# Extract all data from JSON in single jq call (safe: no eval)
+{
+  IFS= read -r current_dir
+  IFS= read -r session_id
+  IFS= read -r model_name
+  IFS= read -r cc_version_json
+  IFS= read -r context_pct
+} < <(echo "$input" | jq -r '
+  (.workspace.current_dir // .cwd // "."),
+  (.session_id // ""),
+  (.model.display_name // "unknown"),
+  (.version // ""),
+  (.context_window.used_percentage // 0 | tostring)
+' 2>/dev/null)
 
 # Ensure defaults for critical numeric values
 context_pct=${context_pct:-0}
@@ -121,10 +132,13 @@ if [ -f "$USAGE_CACHE_SH" ]; then
     source "$USAGE_CACHE_SH"
 elif [ -f "$USAGE_CACHE" ]; then
     # Fallback: parse JSON directly if .sh cache missing
-    eval "$(jq -r '
-        "usage_5h=" + (.five_hour.utilization // 0 | tostring) + "\n" +
-        "usage_5h_reset=" + (.five_hour.resets_at // "" | @sh)
-    ' "$USAGE_CACHE" 2>/dev/null)"
+    {
+        IFS= read -r usage_5h
+        IFS= read -r usage_5h_reset
+    } < <(jq -r '
+        (.five_hour.utilization // 0 | tostring),
+        (.five_hour.resets_at // "")
+    ' "$USAGE_CACHE" 2>/dev/null)
 else
     usage_5h=0; usage_5h_reset=""
 fi
