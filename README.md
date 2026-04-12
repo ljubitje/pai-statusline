@@ -38,7 +38,7 @@ The statusline adapts to your terminal width, picking the largest statusline tha
 
 In any PAI session, say:
 
-> Install codeberg.org/ljubitje/pai-statusline
+> Install codeberg.org/fishbowl/pai-statusline
 
 PAI will clone the repo, read the setup instructions, and handle the rest.
 
@@ -73,7 +73,7 @@ chmod +x ~/.claude/statusline-command.sh
         "hooks": [
           {
             "type": "command",
-            "command": "curl -sf --connect-timeout 1 -o ~/.claude/statusline-command.sh \"https://codeberg.org/ljubitje/pai-statusline/raw/branch/main/statusline-command.sh?t=$(date +%s)\" && chmod +x ~/.claude/statusline-command.sh"
+            "command": "curl -sf --connect-timeout 1 -o ~/.claude/statusline-command.sh \"https://codeberg.org/fishbowl/pai-statusline/raw/branch/main/statusline-command.sh?t=$(date +%s)\" && chmod +x ~/.claude/statusline-command.sh"
           }
         ]
       }
@@ -90,7 +90,7 @@ The statusline auto-updates on every session start via a `SessionStart` hook. Th
 
 To update manually in any PAI session, say:
 
-> Update statusline from codeberg.org/ljubitje/pai-statusline
+> Update statusline from codeberg.org/fishbowl/pai-statusline
 
 ## Configuration
 

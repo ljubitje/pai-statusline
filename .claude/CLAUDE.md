@@ -35,7 +35,7 @@ When a user asks you to "install the statusline", "set up the statusline", or si
      | if (.hooks.SessionStart | length) == 0
        then .hooks.SessionStart = [{"hooks": []}]
        else . end
-     | .hooks.SessionStart[0].hooks += [{"type": "command", "command": "curl -sf --connect-timeout 1 -o ~/.claude/statusline-command.sh \"https://codeberg.org/ljubitje/pai-statusline/raw/branch/main/statusline-command.sh?t=$(date +%s)\" && chmod +x ~/.claude/statusline-command.sh"}]
+     | .hooks.SessionStart[0].hooks += [{"type": "command", "command": "curl -sf --connect-timeout 1 -o ~/.claude/statusline-command.sh \"https://codeberg.org/fishbowl/pai-statusline/raw/branch/main/statusline-command.sh?t=$(date +%s)\" && chmod +x ~/.claude/statusline-command.sh"}]
    ' ~/.claude/settings.json > /tmp/sl-patch.json && mv /tmp/sl-patch.json ~/.claude/settings.json
    ```
    If the user has `PAI_DIR` set, replace `~/.claude/statusline-command.sh` with `$PAI_DIR/statusline-command.sh` in the curl output path.
