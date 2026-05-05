@@ -355,28 +355,21 @@ format_reset_countdown() {
     fi
 }
 
-# Format reset time as day-of-week + clock (e.g., "TODAY@21:30", "SUN@21:30").
-# Used for the 7d window where countdowns ("3d12h") are less actionable than
-# the actual day the reset will land on. ISO timestamp in, "DAY@HH:MM" out.
-format_reset_day() {
+# Format reset time as a coarse countdown for the 7d window (e.g., "5d", "12h", "now").
+# Days for ≥24h remaining (floor — "5d" means "in the 5–6 day window"); hours
+# (ceiling) under 24h so 30 minutes shows as "1h", not "0h". The single number
+# is enough next to a calendar emoji — no day-of-week or clock noise.
+format_reset_days() {
     local ts="$1"
     [ -z "$ts" ] && { echo "—"; return; }
     local reset_epoch
     reset_epoch=$(date -d "$ts" +%s 2>/dev/null) || { echo "—"; return; }
-    [ "$reset_epoch" -le "$_NOW" ] && { echo "now"; return; }
-    local reset_day reset_time reset_dow today_day dow
-    reset_day=$(TZ="${USER_TZ:-UTC}" date -d "@$reset_epoch" +%Y-%m-%d 2>/dev/null) || { echo "—"; return; }
-    reset_time=$(TZ="${USER_TZ:-UTC}" date -d "@$reset_epoch" +%H:%M 2>/dev/null)
-    reset_dow=$(TZ="${USER_TZ:-UTC}" date -d "@$reset_epoch" +%w 2>/dev/null)
-    today_day=$(TZ="${USER_TZ:-UTC}" date +%Y-%m-%d 2>/dev/null)
-    if [ "$reset_day" = "$today_day" ]; then
-        echo "TODAY@${reset_time}"
+    local remaining=$(( reset_epoch - _NOW ))
+    [ "$remaining" -le 0 ] && { echo "now"; return; }
+    if [ "$remaining" -ge 86400 ]; then
+        echo "$(( remaining / 86400 ))d"
     else
-        case "$reset_dow" in
-            0) dow="SUN" ;; 1) dow="MON" ;; 2) dow="TUE" ;; 3) dow="WED" ;;
-            4) dow="THU" ;; 5) dow="FRI" ;; 6) dow="SAT" ;; *) dow="—" ;;
-        esac
-        echo "${dow}@${reset_time}"
+        echo "$(( (remaining + 3599) / 3600 ))h"
     fi
 }
 
@@ -747,28 +740,16 @@ if [ "$usage_5h_int" -gt 0 ] || [ -f "$USAGE_CACHE" ]; then
         reset_5h_time="—"
     fi
 
-    # 7d window — only renders when native rate_limits provided it (pre-2.1.x
-    # OAuth path didn't expose 7d at all, so this stays empty for old CCs).
+    # 7d window — only renders when native rate_limits gave us a reset timestamp
+    # (pre-2.1.x OAuth path didn't expose 7d at all, so this stays empty for
+    # old CCs). Reduced to a single calendar emoji + days-until-reset; the % was
+    # redundant with the 5h block's signal and the day-of-week clock was noise.
     usage_7d_block=""
     usage_7d_block_dense=""
-    if [ -n "$usage_7d_reset" ] || [ "${usage_7d:-0}" != "0" ]; then
-        usage_7d_int=${usage_7d%%.*}
-        [ -z "$usage_7d_int" ] && usage_7d_int=0
-        usage_7d_remaining=$((100 - usage_7d_int))
-        [ "$usage_7d_remaining" -lt 0 ] && usage_7d_remaining=0
-        if   [ "$usage_7d_remaining" -le 10 ]; then usage_7d_color="$TEXT_RED"
-        elif [ "$usage_7d_remaining" -le 20 ]; then usage_7d_color="$TEXT_ORANGE"
-        elif [ "$usage_7d_remaining" -le 30 ]; then usage_7d_color="$TEXT_YELLOW"
-        elif [ "$usage_7d_remaining" -le 50 ]; then usage_7d_color="$TEXT_LIME"
-        else usage_7d_color="$TEXT_GREEN"
-        fi
-        if [ -n "$usage_7d_reset" ]; then
-            reset_7d_day=$(format_reset_day "$usage_7d_reset")
-        else
-            reset_7d_day="—"
-        fi
-        printf -v usage_7d_block '%b' " ${SLATE_600}│${RESET} ${SLATE_500}7d${RESET} ${usage_7d_color}${usage_7d_remaining}%${RESET} 🗓️${SLATE_500}${reset_7d_day}${RESET}"
-        printf -v usage_7d_block_dense '%b' " ${SLATE_600}│${RESET} ${SLATE_500}7d${RESET} ${usage_7d_color}${usage_7d_remaining}%${RESET}"
+    if [ -n "$usage_7d_reset" ]; then
+        reset_7d=$(format_reset_days "$usage_7d_reset")
+        printf -v usage_7d_block '%b' " ${SLATE_600}│${RESET} 🗓️${SLATE_500}${reset_7d}${RESET}"
+        usage_7d_block_dense="$usage_7d_block"
     fi
 
     printf -v usage_full '%b' "${moon}${pct_color}${raw_pct}%${RESET} ${battery_icon}${usage_5h_color}${usage_5h_remaining}%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}${usage_7d_block}"

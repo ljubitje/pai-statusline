@@ -17,8 +17,7 @@ Dense personal statusline for [PAI](https://github.com/danielmiessler/Personal_A
 | Usage | 🌑🌘🌗🌖🌕 | <span style="color:rgb(255,193,7)">65%</span> | Context moon phase + % (fills as context grows) |
 | | 🔋 | <span style="color:rgb(150,190,40)">65%</span> | 5-hour budget remaining % |
 | | 🔄 | 3h30m | Time to reset (countdown) |
-| | 7d | <span style="color:rgb(150,190,40)">77%</span> | 7-day budget remaining % (Claude Code ≥2.1.x with native rate_limits) |
-| | 🗓️ | MON@00:30 | 7-day reset day + clock (TODAY for same-day) |
+| | 🗓️ | 6d | Days (or hours, if <24h) until 7-day budget reset (Claude Code ≥2.1.x with native rate_limits) |
 | Learning | 🧠 | <span style="color:rgb(150,190,40)">7.1</span> <span style="color:rgb(150,190,40)">▄</span><span style="color:rgb(255,193,7)">▃</span><span style="color:rgb(150,190,40)">▄</span><span style="color:rgb(70,175,95)">▅</span><span style="color:rgb(150,190,40)">▄</span> | Average rating + ratings bar (last 5) |
 | | ✨ | <span style="color:rgb(150,190,40)">8</span>i | Last rating (i=implicit, e=explicit) |
 | | ⭐/🌟 | 12 | Ratings count (🌟 if rated in last hour) |
