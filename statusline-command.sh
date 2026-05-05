@@ -52,15 +52,18 @@ input=$(cat)
   IFS= read -r PAI_VERSION
   IFS= read -r COMPACTION_THRESHOLD
   IFS= read -r ratings_count
+  IFS= read -r SHOW_QUOTE
 } < <(jq -r '
   (.principal.timezone // "UTC"),
   (.pai.version // "—"),
   (.contextDisplay.compactionThreshold // 100 | tostring),
-  (.counts.ratings // 0 | tostring)
+  (.counts.ratings // 0 | tostring),
+  (.statusline.showQuote // false | tostring)
 ' "$SETTINGS_FILE" 2>/dev/null)
 USER_TZ="${USER_TZ:-UTC}"
 PAI_VERSION="${PAI_VERSION:-—}"
 COMPACTION_THRESHOLD="${COMPACTION_THRESHOLD:-100}"
+SHOW_QUOTE="${SHOW_QUOTE:-false}"
 
 # Extract all data from JSON in single jq call (safe: no eval)
 # Also extracts native rate_limits block (Claude Code ≥2.1.x) — when present,
@@ -833,12 +836,13 @@ if [ -f "$_PAI_STATE_JSON" ]; then
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# QUOTE LINE (optional 4th line) — reuses .quote-cache from v5.0 upstream
+# QUOTE LINE (optional 4th line) — reuses .quote-cache from v5.0 upstream.
+# Off by default; opt in via `.statusline.showQuote: true` in settings.json.
 # ─────────────────────────────────────────────────────────────────────────────
 QUOTE_CACHE="$PAI_DIR/.quote-cache"
 QUOTE_AUTHOR='\033[38;2;180;140;60m'
 quote_line=""
-if [ -f "$QUOTE_CACHE" ]; then
+if [ "$SHOW_QUOTE" = "true" ] && [ -f "$QUOTE_CACHE" ]; then
     IFS='|' read -r quote_text quote_author < "$QUOTE_CACHE" 2>/dev/null
     if [ -n "$quote_text" ] && [ -n "$quote_author" ]; then
         printf -v quote_line '%b' "${SLATE_400}\"${quote_text}\"${RESET} ${QUOTE_AUTHOR}—${quote_author}${RESET}"

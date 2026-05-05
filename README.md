@@ -23,7 +23,7 @@ Dense personal statusline for [PAI](https://github.com/danielmiessler/Personal_A
 | | ✨ | <span style="color:rgb(150,190,40)">8</span>i | Last rating (i=implicit, e=explicit) |
 | | ⭐/🌟 | 12 | Ratings count (🌟 if rated in last hour) |
 | State | STATE: | HEALTH 68% │ CREATIVE 31% │ FREEDOM 78% │ RELATIONS 84% │ FIN 42% | Telos dimensions from `PAI/USER/TELOS/PAI_STATE.json` (missing dims render as `—`) |
-| Quote | "…" — | "Strive not to be a success…" —Albert Einstein | Optional 4th line, sourced from `$PAI_DIR/.quote-cache` (ZenQuotes refresh) |
+| Quote | "…" — | "Strive not to be a success…" —Albert Einstein | Off by default. Opt-in via `.statusline.showQuote: true` in `~/.claude/settings.json`; sourced from `$PAI_DIR/.quote-cache` (ZenQuotes refresh) |
 
 ## Automatic resizing
 
