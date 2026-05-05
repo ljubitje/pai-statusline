@@ -14,8 +14,16 @@ set -o pipefail
 # CONFIGURATION
 # ─────────────────────────────────────────────────────────────────────────────
 
-PAI_DIR="${PAI_DIR:-$HOME/.claude}"
-SETTINGS_FILE="$PAI_DIR/settings.json"
+# PAI 5.0 path layout:
+#   CLAUDE_HOME = Claude-Code-owned directory ($HOME/.claude)
+#                 holds settings.json, hooks, statusline-command.sh itself
+#   PAI_DIR     = PAI-owned subtree ($CLAUDE_HOME/PAI by default)
+#                 holds MEMORY/, USER/, ALGORITHM/, etc.
+# Pre-5.0 (legacy) had everything directly under $HOME/.claude — that breaks
+# now because MEMORY moved to $HOME/.claude/PAI/MEMORY.
+CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
+PAI_DIR="${PAI_DIR:-$CLAUDE_HOME/PAI}"
+SETTINGS_FILE="$CLAUDE_HOME/settings.json"
 RATINGS_FILE="$PAI_DIR/MEMORY/LEARNING/SIGNALS/ratings.jsonl"
 MODEL_CACHE="$PAI_DIR/MEMORY/STATE/model-cache.txt"
 USAGE_CACHE="$PAI_DIR/MEMORY/STATE/usage-cache.json"
@@ -44,33 +52,55 @@ input=$(cat)
   IFS= read -r PAI_VERSION
   IFS= read -r COMPACTION_THRESHOLD
   IFS= read -r ratings_count
+  IFS= read -r skills_count
+  IFS= read -r workflows_count
+  IFS= read -r hooks_count
 } < <(jq -r '
   (.principal.timezone // "UTC"),
   (.pai.version // "—"),
   (.contextDisplay.compactionThreshold // 100 | tostring),
-  (.counts.ratings // 0 | tostring)
+  (.counts.ratings // 0 | tostring),
+  (.counts.skills // 0 | tostring),
+  (.counts.workflows // 0 | tostring),
+  (.counts.hooks // 0 | tostring)
 ' "$SETTINGS_FILE" 2>/dev/null)
+skills_count="${skills_count:-0}"
+workflows_count="${workflows_count:-0}"
+hooks_count="${hooks_count:-0}"
 USER_TZ="${USER_TZ:-UTC}"
 PAI_VERSION="${PAI_VERSION:-—}"
 COMPACTION_THRESHOLD="${COMPACTION_THRESHOLD:-100}"
 
 # Extract all data from JSON in single jq call (safe: no eval)
+# Also extracts native rate_limits block (Claude Code ≥2.1.x) — when present,
+# we skip the OAuth API roundtrip entirely (~50ms vs ~200ms, no 429 risk).
 {
   IFS= read -r current_dir
   IFS= read -r session_id
   IFS= read -r model_name
   IFS= read -r cc_version_json
   IFS= read -r context_pct
+  IFS= read -r has_native_rate_limits
+  IFS= read -r native_usage_5h
+  IFS= read -r native_usage_5h_reset
+  IFS= read -r native_usage_7d
+  IFS= read -r native_usage_7d_reset
 } < <(echo "$input" | jq -r '
   (.workspace.current_dir // .cwd // "."),
   (.session_id // ""),
   (.model.display_name // "unknown"),
   (.version // ""),
-  (.context_window.used_percentage // 0 | tostring)
+  (.context_window.used_percentage // 0 | tostring),
+  ((.rate_limits != null) | tostring),
+  (.rate_limits.five_hour.used_percentage // .rate_limits.five_hour.utilization // 0 | tostring),
+  (.rate_limits.five_hour.resets_at // ""),
+  (.rate_limits.seven_day.used_percentage // .rate_limits.seven_day.utilization // 0 | tostring),
+  (.rate_limits.seven_day.resets_at // "")
 ' 2>/dev/null)
 
 # Ensure defaults for critical numeric values
 context_pct=${context_pct:-0}
+has_native_rate_limits="${has_native_rate_limits:-false}"
 
 # Get Claude Code version
 if [ -n "$cc_version_json" ] && [ "$cc_version_json" != "unknown" ]; then
@@ -84,7 +114,16 @@ fi
 mkdir -p "$(dirname "$MODEL_CACHE")" 2>/dev/null
 echo "$model_name" > "$MODEL_CACHE" 2>/dev/null
 
-dir_name=$(basename "${current_dir:-.}")
+# Session start dir — cache the cwd at first tick of the session and stick with it.
+# Mirrors the SESSION_START_FILE pattern below; means an in-session `cd` doesn't
+# change the displayed dir (statusline shows where the session began).
+SESSION_STARTDIR_FILE="/tmp/pai-session-startdir-${session_id:-$$}"
+if [ ! -f "$SESSION_STARTDIR_FILE" ]; then
+    printf '%s' "${current_dir:-.}" > "$SESSION_STARTDIR_FILE"
+fi
+start_dir=$(cat "$SESSION_STARTDIR_FILE" 2>/dev/null)
+[ -z "$start_dir" ] && start_dir="${current_dir:-.}"
+dir_name=$(basename "$start_dir")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SESSION WALL-CLOCK TIME
@@ -126,22 +165,37 @@ mkdir -p "$_parallel_tmp"
     fi
 } &
 
-# Usage cache — direct source from pre-built .sh (updated by fire-and-forget block)
-USAGE_CACHE_SH="$PAI_DIR/MEMORY/STATE/usage-cache.sh"
-if [ -f "$USAGE_CACHE_SH" ]; then
-    source "$USAGE_CACHE_SH"
-elif [ -f "$USAGE_CACHE" ]; then
-    # Fallback: parse JSON directly if .sh cache missing
-    {
-        IFS= read -r usage_5h
-        IFS= read -r usage_5h_reset
-    } < <(jq -r '
-        (.five_hour.utilization // 0 | tostring),
-        (.five_hour.resets_at // "")
-    ' "$USAGE_CACHE" 2>/dev/null)
+# Usage data — prefer native rate_limits (CC ≥2.1.x) over OAuth cache.
+# Native path skips the OAuth roundtrip entirely; cache path remains as
+# fallback for older CC versions that don't inject .rate_limits.
+if [ "$has_native_rate_limits" = "true" ]; then
+    usage_5h="$native_usage_5h"
+    usage_5h_reset="$native_usage_5h_reset"
+    usage_7d="$native_usage_7d"
+    usage_7d_reset="$native_usage_7d_reset"
 else
-    usage_5h=0; usage_5h_reset=""
+    USAGE_CACHE_SH="$PAI_DIR/MEMORY/STATE/usage-cache.sh"
+    if [ -f "$USAGE_CACHE_SH" ]; then
+        source "$USAGE_CACHE_SH"
+    elif [ -f "$USAGE_CACHE" ]; then
+        {
+            IFS= read -r usage_5h
+            IFS= read -r usage_5h_reset
+            IFS= read -r usage_7d
+            IFS= read -r usage_7d_reset
+        } < <(jq -r '
+            (.five_hour.utilization // 0 | tostring),
+            (.five_hour.resets_at // ""),
+            (.seven_day.utilization // 0 | tostring),
+            (.seven_day.resets_at // "")
+        ' "$USAGE_CACHE" 2>/dev/null)
+    else
+        usage_5h=0; usage_5h_reset=""
+        usage_7d=0; usage_7d_reset=""
+    fi
 fi
+usage_7d="${usage_7d:-0}"
+usage_7d_reset="${usage_7d_reset:-}"
 
 # Status cache — direct source from pre-built .sh (updated by fire-and-forget block)
 STATUS_CACHE_SH="$PAI_DIR/MEMORY/STATE/status-cache.sh"
@@ -300,6 +354,31 @@ format_reset_countdown() {
         [ "$rm" -gt 0 ] && echo "${rh}h${rm}m" || echo "${rh}h"
     else
         echo "${rm}m"
+    fi
+}
+
+# Format reset time as day-of-week + clock (e.g., "TODAY@21:30", "SUN@21:30").
+# Used for the 7d window where countdowns ("3d12h") are less actionable than
+# the actual day the reset will land on. ISO timestamp in, "DAY@HH:MM" out.
+format_reset_day() {
+    local ts="$1"
+    [ -z "$ts" ] && { echo "—"; return; }
+    local reset_epoch
+    reset_epoch=$(date -d "$ts" +%s 2>/dev/null) || { echo "—"; return; }
+    [ "$reset_epoch" -le "$_NOW" ] && { echo "now"; return; }
+    local reset_day reset_time reset_dow today_day dow
+    reset_day=$(TZ="${USER_TZ:-UTC}" date -d "@$reset_epoch" +%Y-%m-%d 2>/dev/null) || { echo "—"; return; }
+    reset_time=$(TZ="${USER_TZ:-UTC}" date -d "@$reset_epoch" +%H:%M 2>/dev/null)
+    reset_dow=$(TZ="${USER_TZ:-UTC}" date -d "@$reset_epoch" +%w 2>/dev/null)
+    today_day=$(TZ="${USER_TZ:-UTC}" date +%Y-%m-%d 2>/dev/null)
+    if [ "$reset_day" = "$today_day" ]; then
+        echo "TODAY@${reset_time}"
+    else
+        case "$reset_dow" in
+            0) dow="SUN" ;; 1) dow="MON" ;; 2) dow="TUE" ;; 3) dow="WED" ;;
+            4) dow="THU" ;; 5) dow="FRI" ;; 6) dow="SAT" ;; *) dow="—" ;;
+        esac
+        echo "${dow}@${reset_time}"
     fi
 }
 
@@ -658,13 +737,123 @@ if [ "$usage_5h_int" -gt 0 ] || [ -f "$USAGE_CACHE" ]; then
     else
         reset_5h_time="—"
     fi
-    printf -v usage_full '%b' "${moon}${pct_color}${raw_pct}%${RESET} ${battery_icon}${usage_5h_color}${usage_5h_remaining}%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}"
-    printf -v usage_dense '%b' "${moon}${pct_color}${raw_pct}%${RESET} ${battery_icon}${usage_5h_color}${usage_5h_remaining}%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}"
+
+    # 7d window — only renders when native rate_limits provided it (pre-2.1.x
+    # OAuth path didn't expose 7d at all, so this stays empty for old CCs).
+    usage_7d_block=""
+    usage_7d_block_dense=""
+    if [ -n "$usage_7d_reset" ] || [ "${usage_7d:-0}" != "0" ]; then
+        usage_7d_int=${usage_7d%%.*}
+        [ -z "$usage_7d_int" ] && usage_7d_int=0
+        usage_7d_remaining=$((100 - usage_7d_int))
+        [ "$usage_7d_remaining" -lt 0 ] && usage_7d_remaining=0
+        if   [ "$usage_7d_remaining" -le 10 ]; then usage_7d_color="$TEXT_RED"
+        elif [ "$usage_7d_remaining" -le 20 ]; then usage_7d_color="$TEXT_ORANGE"
+        elif [ "$usage_7d_remaining" -le 30 ]; then usage_7d_color="$TEXT_YELLOW"
+        elif [ "$usage_7d_remaining" -le 50 ]; then usage_7d_color="$TEXT_LIME"
+        else usage_7d_color="$TEXT_GREEN"
+        fi
+        if [ -n "$usage_7d_reset" ]; then
+            reset_7d_day=$(format_reset_day "$usage_7d_reset")
+        else
+            reset_7d_day="—"
+        fi
+        printf -v usage_7d_block '%b' " ${SLATE_600}│${RESET} ${SLATE_500}7d${RESET} ${usage_7d_color}${usage_7d_remaining}%${RESET} 🗓️${SLATE_500}${reset_7d_day}${RESET}"
+        printf -v usage_7d_block_dense '%b' " ${SLATE_600}│${RESET} ${SLATE_500}7d${RESET} ${usage_7d_color}${usage_7d_remaining}%${RESET}"
+    fi
+
+    printf -v usage_full '%b' "${moon}${pct_color}${raw_pct}%${RESET} ${battery_icon}${usage_5h_color}${usage_5h_remaining}%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}${usage_7d_block}"
+    printf -v usage_dense '%b' "${moon}${pct_color}${raw_pct}%${RESET} ${battery_icon}${usage_5h_color}${usage_5h_remaining}%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}${usage_7d_block_dense}"
     printf -v usage_ultra '%b' "${moon}${pct_color}${raw_pct}%${RESET} ${battery_icon}${usage_5h_color}${usage_5h_remaining}%${RESET}"
 else
     printf -v usage_full '%b' "${moon}${pct_color}${raw_pct}%${RESET}"
     printf -v usage_dense '%b' "${moon}${pct_color}${raw_pct}%${RESET}"
     printf -v usage_ultra '%b' "${moon}${pct_color}${raw_pct}%${RESET}"
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STATE METER (B1 v5.0-style row) — reads PAI_STATE.json, renders dimensions
+# ─────────────────────────────────────────────────────────────────────────────
+# Format: STATE: HEALTH 68% │ CREATIVE 31% │ FREEDOM 78% │ RELATIONS 84% │ FIN 42%
+# Missing dimensions render as "—" (per ISC-24 — never null or 0).
+state_line=""
+_PAI_STATE_JSON="$PAI_DIR/USER/TELOS/PAI_STATE.json"
+if [ -f "$_PAI_STATE_JSON" ]; then
+    _dim_color() {
+        case "$1" in
+            health)        printf '\033[38;2;56;189;248m' ;;
+            money)         printf '\033[38;2;37;99;235m' ;;
+            freedom)       printf '\033[38;2;59;130;246m' ;;
+            relationships) printf '\033[38;2;96;165;250m' ;;
+            creative)      printf '\033[38;2;147;197;253m' ;;
+            *)             printf '%b' "$SLATE_400" ;;
+        esac
+    }
+    _tier_color() {
+        local pct="${1%%.*}"
+        case "$pct" in
+            ''|*[!0-9]*) printf '\033[38;2;100;116;139m'; return ;;
+        esac
+        if   [ "$pct" -ge 75 ]; then printf '\033[38;2;219;234;254m'
+        elif [ "$pct" -ge 50 ]; then printf '\033[38;2;96;165;250m'
+        else                         printf '\033[38;2;100;116;139m'
+        fi
+    }
+    _dims=(health creative freedom relationships money)
+    _labels=(HEALTH CREATIVE FREEDOM RELATIONS FIN)
+    declare -a _pcts=(— — — — —)
+    IFS=$'\t' read -r _state_h _state_c _state_f _state_r _state_m <<< "$(
+        jq -r '[.dimensions.health.pct // "", .dimensions.creative.pct // "", .dimensions.freedom.pct // "", .dimensions.relationships.pct // "", .dimensions.money.pct // ""] | @tsv' "$_PAI_STATE_JSON" 2>/dev/null
+    )"
+    [ -n "$_state_h" ] && [ "$_state_h" != "null" ] && _pcts[0]="${_state_h%%.*}"
+    [ -n "$_state_c" ] && [ "$_state_c" != "null" ] && _pcts[1]="${_state_c%%.*}"
+    [ -n "$_state_f" ] && [ "$_state_f" != "null" ] && _pcts[2]="${_state_f%%.*}"
+    [ -n "$_state_r" ] && [ "$_state_r" != "null" ] && _pcts[3]="${_state_r%%.*}"
+    [ -n "$_state_m" ] && [ "$_state_m" != "null" ] && _pcts[4]="${_state_m%%.*}"
+
+    _state_raw="${SLATE_500}STATE:${RESET} "
+    for _i in "${!_dims[@]}"; do
+        _dc=$(_dim_color "${_dims[$_i]}")
+        _tc=$(_tier_color "${_pcts[$_i]}")
+        _val="${_pcts[$_i]}"
+        case "$_val" in
+            ''|*[!0-9]*) _suffix="" ;;
+            *)           _suffix="%" ;;
+        esac
+        _state_raw+="${_dc}${_labels[$_i]}${RESET} ${_tc}${_val}${_suffix}${RESET}"
+        [ "$_i" -lt $((${#_dims[@]} - 1)) ] && _state_raw+=" ${SLATE_600}│${RESET} "
+    done
+    printf -v state_line '%b' "$_state_raw"
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+# COUNTS ROW (B2 v5.0-style) — skills (public🌐 / private🏠), workflows, hooks
+# ─────────────────────────────────────────────────────────────────────────────
+# settings.json counts.{skills,workflows,hooks} populated by SessionStart hook.
+# Counts.skills is a single number; we render it as public + 0 private (mirrors
+# v5.0 visual). When a private-skills dimension is added later, plug in here.
+WIELD_ACCENT='\033[38;2;217;119;87m'
+WIELD_WORKFLOWS='\033[38;2;180;140;60m'
+WIELD_HOOKS='\033[38;2;125;211;252m'
+counts_line=""
+if [ "${skills_count:-0}" != "0" ] || [ "${workflows_count:-0}" != "0" ] || [ "${hooks_count:-0}" != "0" ]; then
+    _counts_raw="${WIELD_ACCENT}SK:${RESET} ${SLATE_300}${skills_count}${RESET}${SLATE_600}🌐${RESET} ${SLATE_500}0${RESET}${SLATE_600}🏠${RESET}"
+    _counts_raw+=" ${SLATE_600}│${RESET} ${WIELD_WORKFLOWS}WF:${RESET} ${SLATE_300}${workflows_count}${RESET}"
+    _counts_raw+=" ${SLATE_600}│${RESET} ${WIELD_HOOKS}HK:${RESET} ${SLATE_300}${hooks_count}${RESET}"
+    printf -v counts_line '%b' "$_counts_raw"
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+# QUOTE LINE (F10 — optional 5th line) — reuses .quote-cache from v5.0 upstream
+# ─────────────────────────────────────────────────────────────────────────────
+QUOTE_CACHE="$PAI_DIR/.quote-cache"
+QUOTE_AUTHOR='\033[38;2;180;140;60m'
+quote_line=""
+if [ -f "$QUOTE_CACHE" ]; then
+    IFS='|' read -r quote_text quote_author < "$QUOTE_CACHE" 2>/dev/null
+    if [ -n "$quote_text" ] && [ -n "$quote_author" ]; then
+        printf -v quote_line '%b' "${SLATE_400}\"${quote_text}\"${RESET} ${QUOTE_AUTHOR}—${quote_author}${RESET}"
+    fi
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -685,16 +874,27 @@ line2_ultra="${usage_ultra}"
 [ -n "$learn_dense" ] && line2_dense="${line2_dense}${sep}${learn_dense}"
 [ -n "$learn_ultra" ] && line2_ultra="${line2_ultra}${sep}${learn_ultra}"
 
+# Extra lines (state, counts, quote) — emitted after the chosen-tier line1+line2.
+# Each is non-empty only when its source data exists; missing rows simply skip.
+emit_extras() {
+    [ -n "$state_line" ] && printf '%s\n' "$state_line"
+    [ -n "$counts_line" ] && printf '%s\n' "$counts_line"
+    [ -n "$quote_line" ] && printf '%s\n' "$quote_line"
+}
+
 # Try full → dense → ultradense (pick largest that fits)
 _max_w=$(display_max_width "$line1_full" "$line2_full")
 if [ "$_max_w" -le "$term_width" ]; then
     printf '%s\n%s\n' "$line1_full" "$line2_full"
+    emit_extras
 else
     _max_w=$(display_max_width "$line1_dense" "$line2_dense")
     if [ "$_max_w" -le "$term_width" ]; then
         printf '%s\n%s\n' "$line1_dense" "$line2_dense"
+        emit_extras
     else
         printf '%s\n%s\n' "$line1_ultra" "$line2_ultra"
+        # ultradense skips extras — narrow terminal can't fit the state row anyway
     fi
 fi
 
@@ -708,10 +908,11 @@ _bg_lock="/tmp/pai-bg-fetch.lock"
 if ! [ -f "$_bg_lock" ] || [ $(($(date +%s) - $(get_mtime "$_bg_lock"))) -gt 10 ]; then
     touch "$_bg_lock" 2>/dev/null
     (
-        # Usage API refresh
+        # Usage API refresh — SKIP entirely when CC injected native rate_limits.
+        # No need to ping /api/oauth/usage if the data is already in stdin.
         _usage_age=999999
         [ -f "$USAGE_CACHE" ] && _usage_age=$(($(date +%s) - $(get_mtime "$USAGE_CACHE")))
-        if [ "$_usage_age" -gt "$USAGE_CACHE_TTL" ]; then
+        if [ "$has_native_rate_limits" != "true" ] && [ "$_usage_age" -gt "$USAGE_CACHE_TTL" ]; then
             if [ "$(uname -s)" = "Darwin" ]; then
                 _cred_json=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null)
             else
