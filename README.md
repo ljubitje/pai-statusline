@@ -49,26 +49,28 @@ PAI will clone the repo, read the setup instructions, and handle the rest.
 
 ## Installation via manual labour
 
+The statusline script lives under `$PAI_DIR` (default `$HOME/.claude/PAI`) — alongside the rest of your PAI-shipped assets. `$HOME/.claude` (`CLAUDE_HOME`) holds only Claude-Code–managed files (`settings.json`, `hooks/`).
+
 1. Copy the script:
 
 ```bash
-mkdir -p ~/.claude
-cp statusline-command.sh ~/.claude/statusline-command.sh
-chmod +x ~/.claude/statusline-command.sh
+mkdir -p "${PAI_DIR:-$HOME/.claude/PAI}"
+cp statusline-command.sh "${PAI_DIR:-$HOME/.claude/PAI}/statusline-command.sh"
+chmod +x "${PAI_DIR:-$HOME/.claude/PAI}/statusline-command.sh"
 ```
 
-2. Add to `~/.claude/settings.json` (create the file with `{}` if it doesn't exist):
+2. Add to `~/.claude/settings.json` (create the file with `{}` if it doesn't exist). Use the absolute path that `${PAI_DIR:-$HOME/.claude/PAI}` resolves to on your system — Claude Code does not expand env vars in this field:
 
 ```json
 {
   "statusLine": {
     "type": "command",
-    "command": "~/.claude/statusline-command.sh"
+    "command": "/absolute/path/to/PAI/statusline-command.sh"
   }
 }
 ```
 
-3. Add the auto-update hook to `~/.claude/settings.json` under `hooks.SessionStart`:
+3. Add the auto-update hook to `~/.claude/settings.json` under `hooks.SessionStart`. The hook command runs in a shell, so `$PAI_DIR` does expand here:
 
 ```json
 {
@@ -78,7 +80,7 @@ chmod +x ~/.claude/statusline-command.sh
         "hooks": [
           {
             "type": "command",
-            "command": "curl -sf --connect-timeout 1 -o ~/.claude/statusline-command.sh \"https://codeberg.org/ljubitje/pai-statusline/raw/branch/main/statusline-command.sh?t=$(date +%s)\" && chmod +x ~/.claude/statusline-command.sh"
+            "command": "curl -sf --connect-timeout 1 -o \"${PAI_DIR:-$HOME/.claude/PAI}/statusline-command.sh\" \"https://codeberg.org/ljubitje/pai-statusline/raw/branch/main/statusline-command.sh?t=$(date +%s)\" && chmod +x \"${PAI_DIR:-$HOME/.claude/PAI}/statusline-command.sh\""
           }
         ]
       }
@@ -113,14 +115,14 @@ The statusline reads configuration from `settings.json`:
 
 ### PAI v5.0 path layout
 
-The statusline supports the PAI v5.0 split between Claude-Code-owned files and PAI-owned files:
+The statusline follows the PAI v5.0 split between Claude-Code–managed files and PAI-shipped files:
 
 | Variable | Default | Holds |
 |----------|---------|-------|
-| `CLAUDE_HOME` | `$HOME/.claude` | `settings.json`, hooks, the statusline script itself |
-| `PAI_DIR` | `$CLAUDE_HOME/PAI` | `MEMORY/`, `USER/`, `ALGORITHM/`, etc. |
+| `CLAUDE_HOME` | `$HOME/.claude` | `settings.json`, `hooks/` — Claude-Code–managed only |
+| `PAI_DIR` | `$CLAUDE_HOME/PAI` | `MEMORY/`, `USER/`, `ALGORITHM/`, **`statusline-command.sh`**, and other PAI assets |
 
-Both can be overridden via env vars. Pre-5.0 layouts (everything directly under `$HOME/.claude`) are not supported by this version — see git history for the legacy script.
+The statusline script is a PAI-shipped, PAI-updated asset, so it lives under `PAI_DIR` alongside the rest. Both vars can be overridden via env. Pre-5.0 layouts (everything directly under `$HOME/.claude`) are not supported by this version — see git history for the legacy script.
 
 ### Telos state file
 
