@@ -145,12 +145,16 @@ _parallel_tmp="/tmp/pai-parallel-$$"
 mkdir -p "$_parallel_tmp"
 
 # Background subshell for git only (counts now extracted in settings jq above)
+# All git calls use `-C "$current_dir"` so foreground porcelain check (line ~399)
+# and these branch/last-commit reads agree on the same git root. Branch name is
+# emitted via printf %q so a branch like `feat/'oops` can't break `source git.sh`.
 {
-    if git rev-parse --git-dir > /dev/null 2>&1; then
-        _branch=$(git branch --show-current 2>/dev/null)
+    _gdir="${current_dir:-.}"
+    if git -C "$_gdir" rev-parse --git-dir > /dev/null 2>&1; then
+        _branch=$(git -C "$_gdir" branch --show-current 2>/dev/null)
         [ -z "$_branch" ] && _branch="detached"
-        _last_epoch=$(git log -1 --format='%ct' 2>/dev/null)
-        printf "branch='%s'\nlast_commit_epoch=%s\nis_git_repo=true\n" "$_branch" "${_last_epoch:-0}" > "$_parallel_tmp/git.sh"
+        _last_epoch=$(git -C "$_gdir" log -1 --format='%ct' 2>/dev/null)
+        printf "branch=%q\nlast_commit_epoch=%s\nis_git_repo=true\n" "$_branch" "${_last_epoch:-0}" > "$_parallel_tmp/git.sh"
     else
         echo "is_git_repo=false" > "$_parallel_tmp/git.sh"
     fi
@@ -632,14 +636,21 @@ _width_cache="/tmp/pai-term-width-${KITTY_WINDOW_ID:-default}"
 
 detect_terminal_width() {
     local width=""
-    # Tier 1: Kitty IPC (most accurate for Kitty panes)
+    # Tier 1: Kitty IPC (most accurate for Kitty panes).
+    # `kitten @ ls` can hang if Kitty's IPC socket is unresponsive — bound at 1s
+    # so a stalled IPC degrades into Tier 2 instead of freezing the render.
     if [ -n "$KITTY_WINDOW_ID" ] && command -v kitten >/dev/null 2>&1; then
-        width=$(kitten @ ls 2>/dev/null | jq -r --argjson wid "$KITTY_WINDOW_ID" \
+        width=$(timeout 1 kitten @ ls 2>/dev/null | jq -r --argjson wid "$KITTY_WINDOW_ID" \
             '.[].tabs[].windows[] | select(.id == $wid) | .columns' 2>/dev/null)
     fi
-    # Tier 2: Direct TTY query
-    [ -z "$width" ] || [ "$width" = "0" ] || [ "$width" = "null" ] && \
-        width=$(stty size </dev/tty 2>/dev/null | awk '{print $2}')
+    # Tier 2: Direct TTY query. The redirect itself fails with "No such device
+    # or address" when there's no controlling tty — that error comes from bash,
+    # not stty, so it has to be caught at the surrounding subshell level.
+    if [ -z "$width" ] || [ "$width" = "0" ] || [ "$width" = "null" ]; then
+        if [ -e /dev/tty ]; then
+            width=$( { stty size </dev/tty 2>/dev/null | awk '{print $2}'; } 2>/dev/null )
+        fi
+    fi
     # Tier 3: tput fallback
     [ -z "$width" ] || [ "$width" = "0" ] && width=$(tput cols 2>/dev/null)
     # Cache if valid
@@ -659,9 +670,13 @@ detect_terminal_width() {
 
 term_width=$(detect_terminal_width)
 
-# Max display width of two lines (strip ANSI escapes, count display columns)
+# Max display width of two lines (strip ANSI escapes, count display columns).
+# Uses awk for the max-line-length so this works on macOS/BSD where `wc -L` is
+# absent (GNU coreutils only). Wide chars / emoji still don't count as 2 cells
+# here, but neither did wc -L — the prior behavior is preserved.
 display_max_width() {
-    printf '%s\n%s' "$1" "$2" | sed 's/\x1b\[[0-9;]*m//g' | wc -L
+    printf '%s\n%s' "$1" "$2" | sed 's/\x1b\[[0-9;]*m//g' \
+        | awk 'BEGIN{m=0} {l=length($0); if (l>m) m=l} END{print m+0}'
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -889,7 +904,7 @@ if ! [ -f "$_bg_lock" ] || [ $(($(date +%s) - $(get_mtime "$_bg_lock"))) -gt 10 
             if [ "$(uname -s)" = "Darwin" ]; then
                 _cred_json=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null)
             else
-                _cred_json=$(cat "${HOME}/.claude/.credentials.json" 2>/dev/null)
+                _cred_json=$(cat "$CLAUDE_HOME/.credentials.json" 2>/dev/null)
             fi
             _token=$(echo "$_cred_json" | jq -r '.claudeAiOauth.accessToken // ""' 2>/dev/null)
             if [ -n "$_token" ]; then
