@@ -1,6 +1,6 @@
 # PAI statusline
 
-Dense personal statusline for [PAI](https://github.com/danielmiessler/pai), using [Claude Code](https://claude.com/product/claude-code). Renders 2 core lines (identity + usage) plus 3 optional rows (Telos state, counts, quote) when the data is available.
+Dense personal statusline for [PAI](https://github.com/danielmiessler/Personal_AI_Infrastructure), using [Claude Code](https://claude.com/product/claude-code). Renders 2 core lines (identity + usage) plus 2 optional rows (Telos state, quote) when the data is available.
 
 <img src="screenshot.png" alt="PAI statusline screenshot" width="810">
 
@@ -23,8 +23,7 @@ Dense personal statusline for [PAI](https://github.com/danielmiessler/pai), usin
 | | ✨ | <span style="color:rgb(150,190,40)">8</span>i | Last rating (i=implicit, e=explicit) |
 | | ⭐/🌟 | 12 | Ratings count (🌟 if rated in last hour) |
 | State | STATE: | HEALTH 68% │ CREATIVE 31% │ FREEDOM 78% │ RELATIONS 84% │ FIN 42% | Telos dimensions from `PAI/USER/TELOS/PAI_STATE.json` (missing dims render as `—`) |
-| Counts | SK: WF: HK: | 45🌐 0🏠 │ 171 │ 29 | Skills (public/private), workflows, hooks from `settings.json` `counts.*` |
-| Quote | "…" — | "Strive not to be a success…" —Albert Einstein | Optional 5th line, sourced from `$PAI_DIR/.quote-cache` (ZenQuotes refresh) |
+| Quote | "…" — | "Strive not to be a success…" —Albert Einstein | Optional 4th line, sourced from `$PAI_DIR/.quote-cache` (ZenQuotes refresh) |
 
 ## Automatic resizing
 
@@ -109,9 +108,6 @@ The statusline reads configuration from `settings.json`:
 | `principal.timezone` | `UTC` | Your timezone for reset time display (e.g., `America/New_York`) |
 | `pai.version` | `--` | PAI version string |
 | `counts.ratings` | `0` | Total ratings count (populated by PAI stop hooks) |
-| `counts.skills` | `0` | Public skills count (rendered in SK row) |
-| `counts.workflows` | `0` | Workflows count (rendered in WF row) |
-| `counts.hooks` | `0` | Hooks count (rendered in HK row) |
 
 ### PAI v5.0 path layout
 

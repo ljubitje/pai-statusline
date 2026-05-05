@@ -52,21 +52,12 @@ input=$(cat)
   IFS= read -r PAI_VERSION
   IFS= read -r COMPACTION_THRESHOLD
   IFS= read -r ratings_count
-  IFS= read -r skills_count
-  IFS= read -r workflows_count
-  IFS= read -r hooks_count
 } < <(jq -r '
   (.principal.timezone // "UTC"),
   (.pai.version // "—"),
   (.contextDisplay.compactionThreshold // 100 | tostring),
-  (.counts.ratings // 0 | tostring),
-  (.counts.skills // 0 | tostring),
-  (.counts.workflows // 0 | tostring),
-  (.counts.hooks // 0 | tostring)
+  (.counts.ratings // 0 | tostring)
 ' "$SETTINGS_FILE" 2>/dev/null)
-skills_count="${skills_count:-0}"
-workflows_count="${workflows_count:-0}"
-hooks_count="${hooks_count:-0}"
 USER_TZ="${USER_TZ:-UTC}"
 PAI_VERSION="${PAI_VERSION:-—}"
 COMPACTION_THRESHOLD="${COMPACTION_THRESHOLD:-100}"
@@ -827,24 +818,7 @@ if [ -f "$_PAI_STATE_JSON" ]; then
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# COUNTS ROW (B2 v5.0-style) — skills (public🌐 / private🏠), workflows, hooks
-# ─────────────────────────────────────────────────────────────────────────────
-# settings.json counts.{skills,workflows,hooks} populated by SessionStart hook.
-# Counts.skills is a single number; we render it as public + 0 private (mirrors
-# v5.0 visual). When a private-skills dimension is added later, plug in here.
-WIELD_ACCENT='\033[38;2;217;119;87m'
-WIELD_WORKFLOWS='\033[38;2;180;140;60m'
-WIELD_HOOKS='\033[38;2;125;211;252m'
-counts_line=""
-if [ "${skills_count:-0}" != "0" ] || [ "${workflows_count:-0}" != "0" ] || [ "${hooks_count:-0}" != "0" ]; then
-    _counts_raw="${WIELD_ACCENT}SK:${RESET} ${SLATE_300}${skills_count}${RESET}${SLATE_600}🌐${RESET} ${SLATE_500}0${RESET}${SLATE_600}🏠${RESET}"
-    _counts_raw+=" ${SLATE_600}│${RESET} ${WIELD_WORKFLOWS}WF:${RESET} ${SLATE_300}${workflows_count}${RESET}"
-    _counts_raw+=" ${SLATE_600}│${RESET} ${WIELD_HOOKS}HK:${RESET} ${SLATE_300}${hooks_count}${RESET}"
-    printf -v counts_line '%b' "$_counts_raw"
-fi
-
-# ─────────────────────────────────────────────────────────────────────────────
-# QUOTE LINE (F10 — optional 5th line) — reuses .quote-cache from v5.0 upstream
+# QUOTE LINE (optional 4th line) — reuses .quote-cache from v5.0 upstream
 # ─────────────────────────────────────────────────────────────────────────────
 QUOTE_CACHE="$PAI_DIR/.quote-cache"
 QUOTE_AUTHOR='\033[38;2;180;140;60m'
@@ -874,11 +848,10 @@ line2_ultra="${usage_ultra}"
 [ -n "$learn_dense" ] && line2_dense="${line2_dense}${sep}${learn_dense}"
 [ -n "$learn_ultra" ] && line2_ultra="${line2_ultra}${sep}${learn_ultra}"
 
-# Extra lines (state, counts, quote) — emitted after the chosen-tier line1+line2.
+# Extra lines (state, quote) — emitted after the chosen-tier line1+line2.
 # Each is non-empty only when its source data exists; missing rows simply skip.
 emit_extras() {
     [ -n "$state_line" ] && printf '%s\n' "$state_line"
-    [ -n "$counts_line" ] && printf '%s\n' "$counts_line"
     [ -n "$quote_line" ] && printf '%s\n' "$quote_line"
 }
 
@@ -974,8 +947,13 @@ if ! [ -f "$_bg_lock" ] || [ $(($(date +%s) - $(get_mtime "$_bg_lock"))) -gt 10 
         [ -f "$VERSION_CACHE_SH" ] && _ver_age=$(($(date +%s) - $(get_mtime "$VERSION_CACHE_SH")))
         if [ "$_ver_age" -gt 3600 ]; then
             _cc_lat=$(curl -s --max-time 3 "https://registry.npmjs.org/@anthropic-ai/claude-code/latest" 2>/dev/null | jq -r '.version // empty' 2>/dev/null)
-            _pai_lat=$(curl -sL --max-time 3 "https://api.github.com/repos/danielmiessler/PAI/releases/latest" 2>/dev/null | jq -r '.tag_name // empty' 2>/dev/null)
-            _pai_lat="${_pai_lat#v}"  # strip leading v
+            # PAI publishes releases as directories under /Releases/ on main, not as
+            # tagged GitHub Releases. Pick the highest semver dir name.
+            _pai_lat=$(curl -sL --max-time 3 "https://api.github.com/repos/danielmiessler/Personal_AI_Infrastructure/contents/Releases?ref=main" 2>/dev/null \
+                | jq -r '[.[] | select(.type=="dir") | .name | select(test("^v?[0-9]+\\.[0-9]+\\.[0-9]+$"))]
+                         | map(ltrimstr("v"))
+                         | sort_by(split(".") | map(tonumber))
+                         | last // empty' 2>/dev/null)
             if [ -n "$_cc_lat" ] || [ -n "$_pai_lat" ]; then
                 printf "cc_latest='%s'\npai_latest='%s'\n" "${_cc_lat:-}" "${_pai_lat:-}" > "$VERSION_CACHE_SH" 2>/dev/null
             fi
