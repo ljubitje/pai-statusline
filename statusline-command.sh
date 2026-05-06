@@ -743,20 +743,8 @@ if [ "$usage_5h_int" -gt 0 ] || [ -f "$USAGE_CACHE" ]; then
         reset_5h_time="—"
     fi
 
-    # 7d window — only renders when native rate_limits gave us a reset timestamp
-    # (pre-2.1.x OAuth path didn't expose 7d at all, so this stays empty for
-    # old CCs). Reduced to a single calendar emoji + days-until-reset; the % was
-    # redundant with the 5h block's signal and the day-of-week clock was noise.
-    usage_7d_block=""
-    usage_7d_block_dense=""
-    if [ -n "$usage_7d_reset" ]; then
-        reset_7d=$(format_reset_days "$usage_7d_reset")
-        printf -v usage_7d_block '%b' " 🗓️${SLATE_500}${reset_7d}${RESET}"
-        usage_7d_block_dense="$usage_7d_block"
-    fi
-
-    printf -v usage_full '%b' "${moon}${pct_color}${raw_pct}%${RESET} ${battery_icon}${usage_5h_color}${usage_5h_remaining}%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}${usage_7d_block}"
-    printf -v usage_dense '%b' "${moon}${pct_color}${raw_pct}%${RESET} ${battery_icon}${usage_5h_color}${usage_5h_remaining}%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}${usage_7d_block_dense}"
+    printf -v usage_full '%b' "${moon}${pct_color}${raw_pct}%${RESET} ${battery_icon}${usage_5h_color}${usage_5h_remaining}%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}"
+    printf -v usage_dense '%b' "${moon}${pct_color}${raw_pct}%${RESET} ${battery_icon}${usage_5h_color}${usage_5h_remaining}%${RESET} 🔄${SLATE_500}${reset_5h_time}${RESET}"
     printf -v usage_ultra '%b' "${moon}${pct_color}${raw_pct}%${RESET} ${battery_icon}${usage_5h_color}${usage_5h_remaining}%${RESET}"
 else
     printf -v usage_full '%b' "${moon}${pct_color}${raw_pct}%${RESET}"
