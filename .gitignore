@@ -8,5 +8,4 @@ Thumbs.db
 *~
 
 # Claude Code project-specific
-.claude/projects/
-.claude/settings.local.json
+.claude/
