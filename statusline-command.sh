@@ -751,7 +751,7 @@ if [ "$usage_5h_int" -gt 0 ] || [ -f "$USAGE_CACHE" ]; then
     usage_7d_block_dense=""
     if [ -n "$usage_7d_reset" ]; then
         reset_7d=$(format_reset_days "$usage_7d_reset")
-        printf -v usage_7d_block '%b' " ${SLATE_600}│${RESET} 🗓️${SLATE_500}${reset_7d}${RESET}"
+        printf -v usage_7d_block '%b' " 🗓️${SLATE_500}${reset_7d}${RESET}"
         usage_7d_block_dense="$usage_7d_block"
     fi
 
