@@ -340,6 +340,8 @@ parse_iso_epoch() {
 format_reset_countdown() {
     local ts="$1"
     [ -z "$ts" ] && { echo "—"; return; }
+    # CC ≥2.1.121 ships resets_at as unix epoch number; older CC shipped ISO 8601.
+    [[ "$ts" =~ ^[0-9]+$ ]] && ts="@$ts"
     local reset_epoch
     reset_epoch=$(date -d "$ts" +%s 2>/dev/null) || { echo "—"; return; }
     local remaining=$(( reset_epoch - _NOW ))
@@ -362,6 +364,7 @@ format_reset_countdown() {
 format_reset_days() {
     local ts="$1"
     [ -z "$ts" ] && { echo "—"; return; }
+    [[ "$ts" =~ ^[0-9]+$ ]] && ts="@$ts"
     local reset_epoch
     reset_epoch=$(date -d "$ts" +%s 2>/dev/null) || { echo "—"; return; }
     local remaining=$(( reset_epoch - _NOW ))
