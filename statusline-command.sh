@@ -79,6 +79,7 @@ SHOW_QUOTE="${SHOW_QUOTE:-false}"
   IFS= read -r native_usage_5h_reset
   IFS= read -r native_usage_7d
   IFS= read -r native_usage_7d_reset
+  IFS= read -r transcript_path
 } < <(echo "$input" | jq -r '
   (.workspace.current_dir // .cwd // "."),
   (.session_id // ""),
@@ -89,7 +90,8 @@ SHOW_QUOTE="${SHOW_QUOTE:-false}"
   (.rate_limits.five_hour.used_percentage // .rate_limits.five_hour.utilization // 0 | tostring),
   (.rate_limits.five_hour.resets_at // ""),
   (.rate_limits.seven_day.used_percentage // .rate_limits.seven_day.utilization // 0 | tostring),
-  (.rate_limits.seven_day.resets_at // "")
+  (.rate_limits.seven_day.resets_at // ""),
+  (.transcript_path // "")
 ' 2>/dev/null)
 
 # Ensure defaults for critical numeric values
@@ -628,6 +630,70 @@ else
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# FILES (Read/Edit/Write since last user prompt — functional interval)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Window: counts since the most recent real user message in the transcript.
+# A "real" user message is one whose content is a text string or a text-typed
+# block — tool_results echoed back as type:user are excluded. Resets to 0 on
+# each new user prompt; grows as Val accumulates Read/Edit/Write tool_uses
+# within the turn. Subagent tool calls live inside Task tool_use blocks and
+# are NOT counted here (they don't enter Val's main context).
+files_full=""; files_dense=""
+if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
+    # UUID of last real user prompt (text content, not tool_result)
+    _last_user_uuid=$(jq -r '
+      select(.type=="user" and ((.message.content | type=="string") or .message.content[0]?.type=="text")) | .uuid
+    ' "$transcript_path" 2>/dev/null | tail -1)
+
+    if [ -n "$_last_user_uuid" ]; then
+        # Slice transcript: only entries after the line containing last user UUID.
+        # awk skip-until pattern is faster than slurping everything into jq.
+        # `last | .fp` is null-guarded for empty $tools — Forge H3 catch.
+        _files_data=$(awk -v target="\"uuid\":\"$_last_user_uuid\"" '
+            !seen && index($0, target) { seen=1; next }
+            seen { print }
+        ' "$transcript_path" | jq -rs '
+            (map(select(.type=="assistant") | .message.content[]? |
+                select(.type=="tool_use" and (.name=="Read" or .name=="Edit" or .name=="Write")) |
+                {name, fp: (.input.file_path // "")})) as $tools |
+            "\($tools | map(select(.name=="Read")) | length)\t\($tools | map(select(.name=="Edit" or .name=="Write")) | length)\t\(if ($tools | length) > 0 then ($tools | last | .fp) else "" end)"
+        ' 2>/dev/null)
+
+        IFS=$'\t' read -r _files_reads _files_writes _files_last_fp <<< "$_files_data"
+        _files_reads=${_files_reads:-0}
+        _files_writes=${_files_writes:-0}
+
+        # Outside-cwd marker: ↗ if last file lives outside current_dir.
+        # Empty path = no tool calls yet this turn = no marker, no basename.
+        _files_arrow=""
+        _files_last_base=""
+        if [ -n "$_files_last_fp" ]; then
+            case "$_files_last_fp" in
+                "$current_dir"/*|"$current_dir") ;;
+                *) _files_arrow="↗" ;;
+            esac
+            _files_last_base=$(basename "$_files_last_fp")
+        fi
+
+        # Color: lime/yellow when active, dim slate when zero
+        if [ "$_files_reads" -gt 0 ] || [ "$_files_writes" -gt 0 ]; then
+            _r_color="$TEXT_LIME"
+            _w_color="$TEXT_YELLOW"
+        else
+            _r_color="$SLATE_400"
+            _w_color="$SLATE_400"
+        fi
+
+        printf -v files_dense '%b' "📂${_r_color}${_files_reads}r${RESET} ✏️${_w_color}${_files_writes}w${RESET}"
+        if [ -n "$_files_last_base" ]; then
+            printf -v files_full '%b' "📂${_r_color}${_files_reads}r${RESET} ✏️${_w_color}${_files_writes}w${RESET} ${SLATE_600}↳${_files_arrow}${RESET}${SLATE_300}${_files_last_base}${RESET}"
+        else
+            files_full="$files_dense"
+        fi
+    fi
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # TERMINAL WIDTH + DISPLAY MEASUREMENT
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -698,10 +764,17 @@ printf -v id_full '%b' "${PAI_P}P${PAI_A}A${PAI_I}I${RESET}${pai_ver_display} ${
 printf -v id_dense '%b' "${PAI_P}P${PAI_A}A${PAI_I}I${RESET} ${SLATE_600}│${RESET} ${CC_C1}C${CC_C2}C${RESET}${cc_ver_display}${_status_display}"
 printf -v id_ultra '%b' "${CC_C1}C${CC_C2}C${RESET}${_status_display}"
 
-# SESSION (session time, starting directory, git tree state)
+# SESSION (session time, starting directory, git tree state, files since last prompt)
 printf -v sess_full '%b' "⏳${SLATE_400}${session_time}${RESET} 📍${SLATE_300}${dir_name}${RESET} 🌳${tree_display:-${SLATE_400}no repo${RESET}}"
 printf -v sess_dense '%b' "⏳${SLATE_400}${session_time}${RESET} 🌳${tree_display:-${SLATE_400}no repo${RESET}}"
 printf -v sess_ultra '%b' "🌳${tree_display:-${SLATE_400}no repo${RESET}}"
+
+# Append files segment (skipped at ultra — narrow term keeps tree-only signal)
+if [ -n "$files_full" ]; then
+    printf -v _files_sep '%b' " ${SLATE_600}│${RESET} "
+    sess_full="${sess_full}${_files_sep}${files_full}"
+    sess_dense="${sess_dense}${_files_sep}${files_dense}"
+fi
 
 # USAGE (context bar + %, 5h utilization %, reset time)
 raw_pct="${context_pct%%.*}"
