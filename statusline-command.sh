@@ -744,6 +744,24 @@ display_max_width() {
         | awk 'BEGIN{m=0} {l=length($0); if (l>m) m=l} END{print m+0}'
 }
 
+# Display width of a single string (ANSI stripped). Wide chars / emoji not
+# counted double — same caveat as display_max_width.
+display_width() {
+    printf '%s' "$1" | sed 's/\x1b\[[0-9;]*m//g' | awk '{print length($0)+0}'
+}
+
+# Right-align $right against the term edge after $left. Gap is at least 1 space;
+# if line is already wider than terminal, falls back to "left + space + right".
+right_align_line() {
+    local left="$1" right="$2" width="$3"
+    local lw rw pad
+    lw=$(display_width "$left")
+    rw=$(display_width "$right")
+    pad=$(( width - lw - rw ))
+    [ "$pad" -lt 1 ] && pad=1
+    printf '%s%*s%s' "$left" "$pad" '' "$right"
+}
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # BUILD SECTIONS (full, dense, ultradense)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -904,12 +922,16 @@ fi
 printf -v sep '%b' " ${SLATE_600}│${RESET} "
 
 # Compose lines at each density
-# line1: ⏳session_time + ID + USAGE
+# line1: ⏳session_time + USAGE on left, ID right-aligned
 # line2: SESSION (dir, tree, files)
 # line3: LEARN + STATE
-line1_full="${sess_time}${sep}${id_full}${sep}${usage_full}"
-line1_dense="${sess_time}${sep}${id_dense}${sep}${usage_dense}"
-line1_ultra="${sess_time}${sep}${id_ultra}${sep}${usage_ultra}"
+line1_full_left="${sess_time}${sep}${usage_full}"
+line1_dense_left="${sess_time}${sep}${usage_dense}"
+line1_ultra_left="${sess_time}${sep}${usage_ultra}"
+# Non-padded composes are used by the density gate so padding never inflates width.
+line1_full="${line1_full_left}${sep}${id_full}"
+line1_dense="${line1_dense_left}${sep}${id_dense}"
+line1_ultra="${line1_ultra_left}${sep}${id_ultra}"
 
 line2_full="${sess_full}"
 line2_dense="${sess_dense}"
@@ -932,18 +954,20 @@ emit_extras() {
     [ -n "$quote_line" ] && printf '%s\n' "$quote_line"
 }
 
-# Try full → dense → ultradense (pick largest that fits)
+# Try full → dense → ultradense (pick largest that fits).
+# Density gate uses NON-padded line1 width so right-align padding can't
+# spuriously fail the gate. Padding is added only after density is picked.
 _max_w=$(display_max_width "$line1_full" "$line2_full")
 if [ "$_max_w" -le "$term_width" ]; then
-    printf '%s\n%s\n' "$line1_full" "$line2_full"
+    printf '%s\n%s\n' "$(right_align_line "$line1_full_left" "$id_full" "$term_width")" "$line2_full"
     emit_extras
 else
     _max_w=$(display_max_width "$line1_dense" "$line2_dense")
     if [ "$_max_w" -le "$term_width" ]; then
-        printf '%s\n%s\n' "$line1_dense" "$line2_dense"
+        printf '%s\n%s\n' "$(right_align_line "$line1_dense_left" "$id_dense" "$term_width")" "$line2_dense"
         emit_extras
     else
-        printf '%s\n%s\n' "$line1_ultra" "$line2_ultra"
+        printf '%s\n%s\n' "$(right_align_line "$line1_ultra_left" "$id_ultra" "$term_width")" "$line2_ultra"
         # ultradense skips extras — narrow terminal can't fit the state row anyway
     fi
 fi
