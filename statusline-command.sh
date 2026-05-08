@@ -828,7 +828,7 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 # STATE METER (B1 v5.0-style row) — reads PAI_STATE.json, renders dimensions
 # ─────────────────────────────────────────────────────────────────────────────
-# Format: STATE: HEALTH 68% │ CREATIVE 31% │ FREEDOM 78% │ RELATIONS 84% │ FIN 42%
+# Format: ❤️ 68% │ 🪄 31% │ 🕊️ 78% │ 🫂 84% │ 🪙 42%
 # Missing dimensions render as "—" (per ISC-24 — never null or 0).
 state_line=""
 _PAI_STATE_JSON="$PAI_DIR/USER/TELOS/PAI_STATE.json"
@@ -854,7 +854,7 @@ if [ -f "$_PAI_STATE_JSON" ]; then
         fi
     }
     _dims=(health creative freedom relationships money)
-    _labels=(HEALTH CREATIVE FREEDOM RELATIONS FIN)
+    _labels=(❤️ 🪄 🕊️ 🫂 🪙)
     declare -a _pcts=(— — — — —)
     IFS=$'\t' read -r _state_h _state_c _state_f _state_r _state_m <<< "$(
         jq -r '[.dimensions.health.pct // "", .dimensions.creative.pct // "", .dimensions.freedom.pct // "", .dimensions.relationships.pct // "", .dimensions.money.pct // ""] | @tsv' "$_PAI_STATE_JSON" 2>/dev/null
@@ -865,7 +865,7 @@ if [ -f "$_PAI_STATE_JSON" ]; then
     [ -n "$_state_r" ] && [ "$_state_r" != "null" ] && _pcts[3]="${_state_r%%.*}"
     [ -n "$_state_m" ] && [ "$_state_m" != "null" ] && _pcts[4]="${_state_m%%.*}"
 
-    _state_raw="${SLATE_500}STATE:${RESET} "
+    _state_raw=""
     for _i in "${!_dims[@]}"; do
         _dc=$(_dim_color "${_dims[$_i]}")
         _tc=$(_tier_color "${_pcts[$_i]}")
