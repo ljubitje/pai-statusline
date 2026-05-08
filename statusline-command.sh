@@ -900,17 +900,17 @@ fi
 
 printf -v sep '%b' " ${SLATE_600}│${RESET} "
 
-# Compose lines at each density
-line1_full="${id_full}${sep}${sess_full}"
-line1_dense="${id_dense}${sep}${sess_dense}"
-line1_ultra="${id_ultra}${sep}${sess_ultra}"
+# Compose lines at each density (USAGE in line1, SESSION in line2 — swapped 2026-05-08)
+line1_full="${id_full}${sep}${usage_full}"
+line1_dense="${id_dense}${sep}${usage_dense}"
+line1_ultra="${id_ultra}${sep}${usage_ultra}"
+[ -n "$learn_full" ] && line1_full="${line1_full}${sep}${learn_full}"
+[ -n "$learn_dense" ] && line1_dense="${line1_dense}${sep}${learn_dense}"
+[ -n "$learn_ultra" ] && line1_ultra="${line1_ultra}${sep}${learn_ultra}"
 
-line2_full="${usage_full}"
-line2_dense="${usage_dense}"
-line2_ultra="${usage_ultra}"
-[ -n "$learn_full" ] && line2_full="${line2_full}${sep}${learn_full}"
-[ -n "$learn_dense" ] && line2_dense="${line2_dense}${sep}${learn_dense}"
-[ -n "$learn_ultra" ] && line2_ultra="${line2_ultra}${sep}${learn_ultra}"
+line2_full="${sess_full}"
+line2_dense="${sess_dense}"
+line2_ultra="${sess_ultra}"
 
 # Extra lines (state, quote) — emitted after the chosen-tier line1+line2.
 # Each is non-empty only when its source data exists; missing rows simply skip.
