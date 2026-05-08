@@ -764,9 +764,12 @@ printf -v id_full '%b' "${PAI_P}P${PAI_A}A${PAI_I}I${RESET}${pai_ver_display} ${
 printf -v id_dense '%b' "${PAI_P}P${PAI_A}A${PAI_I}I${RESET} ${SLATE_600}│${RESET} ${CC_C1}C${CC_C2}C${RESET}${cc_ver_display}${_status_display}"
 printf -v id_ultra '%b' "${CC_C1}C${CC_C2}C${RESET}${_status_display}"
 
-# SESSION (session time, starting directory, git tree state, files since last prompt)
-printf -v sess_full '%b' "⏳${SLATE_400}${session_time}${RESET} 📍${SLATE_300}${dir_name}${RESET} 🌳${tree_display:-${SLATE_400}no repo${RESET}}"
-printf -v sess_dense '%b' "⏳${SLATE_400}${session_time}${RESET} 🌳${tree_display:-${SLATE_400}no repo${RESET}}"
+# SESSION TIME (clock-only — left of line1)
+printf -v sess_time '%b' "⏳${SLATE_400}${session_time}${RESET}"
+
+# SESSION (starting directory, git tree state, files since last prompt) — line2
+printf -v sess_full '%b' "📍${SLATE_300}${dir_name}${RESET} 🌳${tree_display:-${SLATE_400}no repo${RESET}}"
+printf -v sess_dense '%b' "🌳${tree_display:-${SLATE_400}no repo${RESET}}"
 printf -v sess_ultra '%b' "🌳${tree_display:-${SLATE_400}no repo${RESET}}"
 
 # Append files segment (skipped at ultra — narrow term keeps tree-only signal)
@@ -900,22 +903,32 @@ fi
 
 printf -v sep '%b' " ${SLATE_600}│${RESET} "
 
-# Compose lines at each density (USAGE in line1, SESSION in line2 — swapped 2026-05-08)
-line1_full="${id_full}${sep}${usage_full}"
-line1_dense="${id_dense}${sep}${usage_dense}"
-line1_ultra="${id_ultra}${sep}${usage_ultra}"
-[ -n "$learn_full" ] && line1_full="${line1_full}${sep}${learn_full}"
-[ -n "$learn_dense" ] && line1_dense="${line1_dense}${sep}${learn_dense}"
-[ -n "$learn_ultra" ] && line1_ultra="${line1_ultra}${sep}${learn_ultra}"
+# Compose lines at each density
+# line1: ⏳session_time + ID + USAGE
+# line2: SESSION (dir, tree, files)
+# line3: LEARN + STATE
+line1_full="${sess_time}${sep}${id_full}${sep}${usage_full}"
+line1_dense="${sess_time}${sep}${id_dense}${sep}${usage_dense}"
+line1_ultra="${sess_time}${sep}${id_ultra}${sep}${usage_ultra}"
 
 line2_full="${sess_full}"
 line2_dense="${sess_dense}"
 line2_ultra="${sess_ultra}"
 
-# Extra lines (state, quote) — emitted after the chosen-tier line1+line2.
+# Build line3: LEARN on left, then STATE meter (if either exists)
+line3=""
+if [ -n "$learn_full" ] && [ -n "$state_line" ]; then
+    line3="${learn_full}${sep}${state_line}"
+elif [ -n "$learn_full" ]; then
+    line3="${learn_full}"
+elif [ -n "$state_line" ]; then
+    line3="${state_line}"
+fi
+
+# Extra lines (line3 = LEARN+STATE, then quote) — emitted after chosen-tier line1+line2.
 # Each is non-empty only when its source data exists; missing rows simply skip.
 emit_extras() {
-    [ -n "$state_line" ] && printf '%s\n' "$state_line"
+    [ -n "$line3" ] && printf '%s\n' "$line3"
     [ -n "$quote_line" ] && printf '%s\n' "$quote_line"
 }
 
