@@ -832,7 +832,7 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 # STATE METER (B1 v5.0-style row) — reads PAI_STATE.json, renders dimensions
 # ─────────────────────────────────────────────────────────────────────────────
-# Format: ❤️ 68% │ 🪄 31% │ 🕊️ 78% │ 🫂 84% │ 🪙 42%
+# Format: ❤️ 68% 🪄 31% 🕊️ 78% 🫂 84% 🪙 42%
 # Missing dimensions render as "—" (per ISC-24 — never null or 0).
 state_line=""
 _PAI_STATE_JSON="$PAI_DIR/USER/TELOS/PAI_STATE.json"
@@ -879,7 +879,7 @@ if [ -f "$_PAI_STATE_JSON" ]; then
             *)           _suffix="%" ;;
         esac
         _state_raw+="${_dc}${_labels[$_i]}${RESET} ${_tc}${_val}${_suffix}${RESET}"
-        [ "$_i" -lt $((${#_dims[@]} - 1)) ] && _state_raw+=" ${SLATE_600}│${RESET} "
+        [ "$_i" -lt $((${#_dims[@]} - 1)) ] && _state_raw+=" "
     done
     printf -v state_line '%b' "$_state_raw"
 fi
