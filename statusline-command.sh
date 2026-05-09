@@ -64,6 +64,7 @@ USER_TZ="${USER_TZ:-UTC}"
 PAI_VERSION="${PAI_VERSION:-—}"
 COMPACTION_THRESHOLD="${COMPACTION_THRESHOLD:-100}"
 SHOW_QUOTE="${SHOW_QUOTE:-false}"
+SHOW_TIME="${SHOW_TIME:-false}"
 
 # Extract all data from JSON in single jq call (safe: no eval)
 # Also extracts native rate_limits block (Claude Code ≥2.1.x) — when present,
@@ -764,8 +765,12 @@ printf -v id_full '%b' "${PAI_P}P${PAI_A}A${PAI_I}I${RESET}${pai_ver_display} ${
 printf -v id_dense '%b' "${PAI_P}P${PAI_A}A${PAI_I}I${RESET} ${SLATE_600}│${RESET} ${CC_C1}C${CC_C2}C${RESET}${cc_ver_display}${_status_display}"
 printf -v id_ultra '%b' "${CC_C1}C${CC_C2}C${RESET}${_status_display}"
 
-# SESSION TIME (clock-only — left of line1)
-printf -v sess_time '%b' "⏳${SLATE_400}${session_time}${RESET}"
+# SESSION TIME (clock-only — left of line1, opt-in via SHOW_TIME=true)
+if [ "$SHOW_TIME" = "true" ]; then
+    printf -v sess_time '%b' "⏳${SLATE_400}${session_time}${RESET}"
+else
+    sess_time=""
+fi
 
 # SESSION (starting directory, git tree state, files since last prompt) — line2
 printf -v sess_full '%b' "📍${SLATE_300}${dir_name}${RESET} 🌳${tree_display:-${SLATE_400}no repo${RESET}}"
@@ -904,12 +909,18 @@ fi
 printf -v sep '%b' " ${SLATE_600}│${RESET} "
 
 # Compose lines at each density
-# line1: ⏳session_time │ USAGE │ ID  (pipe-separated, no padding)
+# line1: [⏳session_time │] USAGE │ ID  (sess_time omitted when SHOW_TIME=false)
 # line2: SESSION (dir, tree, files)
 # line3: LEARN + STATE
-line1_full="${sess_time}${sep}${usage_full}${sep}${id_full}"
-line1_dense="${sess_time}${sep}${usage_dense}${sep}${id_dense}"
-line1_ultra="${sess_time}${sep}${usage_ultra}${sep}${id_ultra}"
+if [ -n "$sess_time" ]; then
+    line1_full="${sess_time}${sep}${usage_full}${sep}${id_full}"
+    line1_dense="${sess_time}${sep}${usage_dense}${sep}${id_dense}"
+    line1_ultra="${sess_time}${sep}${usage_ultra}${sep}${id_ultra}"
+else
+    line1_full="${usage_full}${sep}${id_full}"
+    line1_dense="${usage_dense}${sep}${id_dense}"
+    line1_ultra="${usage_ultra}${sep}${id_ultra}"
+fi
 
 line2_full="${sess_full}"
 line2_dense="${sess_dense}"
