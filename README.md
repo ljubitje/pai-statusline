@@ -1,27 +1,31 @@
 # PAI statusline
 
-Dense personal statusline for [PAI](https://github.com/danielmiessler/Personal_AI_Infrastructure), using [Claude Code](https://claude.com/product/claude-code). Renders 2 core lines (identity + usage) plus 2 optional rows (Telos state, quote) when the data is available.
+Dense personal statusline for **[PAI 5.0](https://github.com/danielmiessler/Personal_AI_Infrastructure)**, using [Claude Code](https://claude.com/product/claude-code). Renders identity + session on line 1, usage on line 2, and an optional learning + Telos-state row on line 3. A quote row is also available behind a flag.
+
+> Built for the PAI 5.0 path layout: `CLAUDE_HOME` (`$HOME/.claude`) holds Claude-Code–managed files; `PAI_DIR` (`$CLAUDE_HOME/PAI`) holds PAI assets — including this script. Pre-5.0 layouts are not supported; see git history for the legacy script.
 
 <img src="screenshot.png" alt="PAI statusline screenshot" width="810">
+
+> ⚠️ Screenshots in this README are auto-generated (chromium headless render via Noto Color Emoji) — emoji aesthetics differ from a real terminal. Real terminal captures coming once the dev wakes up.
 
 ## What it shows
 
 | Section | Symbol | Example | Info |
 |---------|--------|---------|------|
-| Identity | <span style="color:rgb(30,58,138)">P</span><span style="color:rgb(59,130,246)">A</span><span style="color:rgb(147,197,253)">I</span> | 4.0.3 | PAI version (hidden if latest, outdated segments dimmed) |
-| | <span style="color:rgb(217,119,87)">C</span><span style="color:rgb(191,87,59)">C</span> | 2.1.<span style="color:rgb(99,99,99)">70</span> | Claude Code version (hidden if latest, outdated segments dimmed) |
-| | <span style="color:rgb(70,175,95)">⬤</span> | ok | Claude Code status |
-| Session | ⏳ | 1h23m | Session time |
+| Identity | <span style="color:rgb(30,58,138)">P</span><span style="color:rgb(59,130,246)">A</span><span style="color:rgb(147,197,253)">I</span> | 5.0.0 | PAI version (hidden if latest, outdated segments dimmed) |
+| | <span style="color:rgb(217,119,87)">C</span><span style="color:rgb(191,87,59)">C</span> | 2.1.<span style="color:rgb(99,99,99)">121</span> | Claude Code version (hidden if latest, outdated segments dimmed) |
+| | <span style="color:rgb(70,175,95)">⬤</span> | ok | Claude Code service status |
+| Session | ⏳ | 1h23m | Session time — **hidden by default**, opt-in with `SHOW_TIME=1` |
 | | 📍 | myproject | Starting directory |
 | | 🌳 | <span style="color:rgb(74,222,128)">clean</span> | Git tree state |
 | Usage | 🌑🌘🌗🌖🌕 | <span style="color:rgb(255,193,7)">65%</span> | Context moon phase + % (fills as context grows) |
-| | 🔋 | <span style="color:rgb(150,190,40)">65%</span> | 5-hour budget remaining % |
-| | 🔄 | 3h30m | Time to reset (countdown) |
+| | 🔋 | <span style="color:rgb(150,190,40)">97%</span> | 5-hour budget remaining % |
+| | 🔄 | 4h50m | Time to reset (countdown) |
 | | 🗓️ | 6d | Days (or hours, if <24h) until 7-day budget reset (Claude Code ≥2.1.x with native rate_limits) |
-| Learning | 🧠 | <span style="color:rgb(150,190,40)">7.1</span> <span style="color:rgb(150,190,40)">▄</span><span style="color:rgb(255,193,7)">▃</span><span style="color:rgb(150,190,40)">▄</span><span style="color:rgb(70,175,95)">▅</span><span style="color:rgb(150,190,40)">▄</span> | Average rating + ratings bar (last 5) |
+| Learning | 🧠 | <span style="color:rgb(150,190,40)">7.1</span> <span style="color:rgb(150,190,40)">▄</span><span style="color:rgb(255,193,7)">▃</span><span style="color:rgb(150,190,40)">▄</span><span style="color:rgb(70,175,95)">▅</span><span style="color:rgb(150,190,40)">▄</span> | Average rating + sparkbar of last 5 ratings |
 | | ✨ | <span style="color:rgb(150,190,40)">8</span>i | Last rating (i=implicit, e=explicit) |
 | | ⭐/🌟 | 12 | Ratings count (🌟 if rated in last hour) |
-| State | STATE: | HEALTH 68% │ CREATIVE 31% │ FREEDOM 78% │ RELATIONS 84% │ FIN 42% | Telos dimensions from `PAI/USER/TELOS/PAI_STATE.json` (missing dims render as `—`) |
+| State | <span style="color:rgb(56,189,248)">❤️</span> <span style="color:rgb(147,197,253)">🪄</span> <span style="color:rgb(59,130,246)">🕊️</span> <span style="color:rgb(96,165,250)">🫂</span> <span style="color:rgb(37,99,235)">🪙</span> | 68% 31% 78% 84% 42% | Telos dimensions from `$PAI_DIR/USER/TELOS/PAI_STATE.json` — Health, Creative, Freedom, Relationships, Money. Missing dims render as `—` |
 | Quote | "…" — | "Strive not to be a success…" —Albert Einstein | Off by default. Opt-in via `.statusline.showQuote: true` in `~/.claude/settings.json`; sourced from `$PAI_DIR/.quote-cache` (ZenQuotes refresh) |
 
 ## Automatic resizing
