@@ -78,7 +78,7 @@ chmod +x "${PAI_DIR:-$HOME/.claude/PAI}/statusline-command.sh"
         "hooks": [
           {
             "type": "command",
-            "command": "curl -sf --connect-timeout 1 -o \"${PAI_DIR:-$HOME/.claude/PAI}/statusline-command.sh\" \"https://codeberg.org/ljubitje/pai-statusline/raw/branch/main/statusline-command.sh?t=$(date +%s)\" && chmod +x \"${PAI_DIR:-$HOME/.claude/PAI}/statusline-command.sh\""
+            "command": "curl -sf --connect-timeout 5 --max-time 15 -o \"${PAI_DIR:-$HOME/.claude/PAI}/statusline-command.sh\" \"https://codeberg.org/ljubitje/pai-statusline/raw/branch/main/statusline-command.sh?t=$(date +%s)\" && chmod +x \"${PAI_DIR:-$HOME/.claude/PAI}/statusline-command.sh\""
           }
         ]
       }
@@ -87,11 +87,11 @@ chmod +x "${PAI_DIR:-$HOME/.claude/PAI}/statusline-command.sh"
 }
 ```
 
-This downloads the latest version on every session start. The `?t=` cache-buster bypasses Codeberg's CDN cache (5-min TTL). Fails silently if offline, with a 1-second connect timeout.
+This downloads the latest version on every session start. The `?t=` cache-buster bypasses Codeberg's CDN cache (5-min TTL). Fails silently if offline, with a 5-second connect timeout and 15-second total cap.
 
 ## Auto-update
 
-The statusline auto-updates on every session start via a `SessionStart` hook. The hook uses a `?t=` cache-buster to bypass Codeberg's CDN cache — typically adding ~50-150ms to startup.
+The statusline auto-updates only on **session start**, via the `SessionStart` hook above. There is no mid-session background polling — existing long-running sessions keep the version they started with. To pull a fresh version into a running session, restart Claude Code.
 
 To update manually in any PAI session, say:
 
