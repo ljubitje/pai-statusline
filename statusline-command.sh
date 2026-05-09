@@ -777,12 +777,8 @@ printf -v sess_full '%b' "📍${SLATE_300}${dir_name}${RESET} 🌳${tree_display
 printf -v sess_dense '%b' "🌳${tree_display:-${SLATE_400}no repo${RESET}}"
 printf -v sess_ultra '%b' "🌳${tree_display:-${SLATE_400}no repo${RESET}}"
 
-# Append files segment (skipped at ultra — narrow term keeps tree-only signal)
-if [ -n "$files_full" ]; then
-    printf -v _files_sep '%b' " ${SLATE_600}│${RESET} "
-    sess_full="${sess_full}${_files_sep}${files_full}"
-    sess_dense="${sess_dense}${_files_sep}${files_dense}"
-fi
+# Files segment kept in its own files_full/files_dense vars; appended to
+# the USAGE line at compose time below. Skipped at ultra (narrow term).
 
 # USAGE (context bar + %, 5h utilization %, reset time)
 raw_pct="${context_pct%%.*}"
@@ -925,6 +921,8 @@ fi
 line2_full="${usage_full}"
 line2_dense="${usage_dense}"
 line2_ultra="${usage_ultra}"
+[ -n "$files_full" ]  && line2_full="${line2_full}${sep}${files_full}"
+[ -n "$files_dense" ] && line2_dense="${line2_dense}${sep}${files_dense}"
 
 # Build line3: LEARN on left, then STATE meter (if either exists)
 line3=""
