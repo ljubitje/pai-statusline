@@ -909,22 +909,22 @@ fi
 printf -v sep '%b' " ${SLATE_600}│${RESET} "
 
 # Compose lines at each density
-# line1: [⏳session_time │] ID │ USAGE  (sess_time omitted when SHOW_TIME=false)
-# line2: SESSION (dir, tree, files)
+# line1: [⏳session_time │] ID │ SESSION (dir, tree, files)
+# line2: USAGE bar
 # line3: LEARN + STATE
 if [ -n "$sess_time" ]; then
-    line1_full="${sess_time}${sep}${id_full}${sep}${usage_full}"
-    line1_dense="${sess_time}${sep}${id_dense}${sep}${usage_dense}"
-    line1_ultra="${sess_time}${sep}${id_ultra}${sep}${usage_ultra}"
+    line1_full="${sess_time}${sep}${id_full}${sep}${sess_full}"
+    line1_dense="${sess_time}${sep}${id_dense}${sep}${sess_dense}"
+    line1_ultra="${sess_time}${sep}${id_ultra}${sep}${sess_ultra}"
 else
-    line1_full="${id_full}${sep}${usage_full}"
-    line1_dense="${id_dense}${sep}${usage_dense}"
-    line1_ultra="${id_ultra}${sep}${usage_ultra}"
+    line1_full="${id_full}${sep}${sess_full}"
+    line1_dense="${id_dense}${sep}${sess_dense}"
+    line1_ultra="${id_ultra}${sep}${sess_ultra}"
 fi
 
-line2_full="${sess_full}"
-line2_dense="${sess_dense}"
-line2_ultra="${sess_ultra}"
+line2_full="${usage_full}"
+line2_dense="${usage_dense}"
+line2_ultra="${usage_ultra}"
 
 # Build line3: LEARN on left, then STATE meter (if either exists)
 line3=""
