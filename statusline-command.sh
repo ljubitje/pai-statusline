@@ -909,17 +909,17 @@ fi
 printf -v sep '%b' " ${SLATE_600}│${RESET} "
 
 # Compose lines at each density
-# line1: [⏳session_time │] USAGE │ ID  (sess_time omitted when SHOW_TIME=false)
+# line1: [⏳session_time │] ID │ USAGE  (sess_time omitted when SHOW_TIME=false)
 # line2: SESSION (dir, tree, files)
 # line3: LEARN + STATE
 if [ -n "$sess_time" ]; then
-    line1_full="${sess_time}${sep}${usage_full}${sep}${id_full}"
-    line1_dense="${sess_time}${sep}${usage_dense}${sep}${id_dense}"
-    line1_ultra="${sess_time}${sep}${usage_ultra}${sep}${id_ultra}"
+    line1_full="${sess_time}${sep}${id_full}${sep}${usage_full}"
+    line1_dense="${sess_time}${sep}${id_dense}${sep}${usage_dense}"
+    line1_ultra="${sess_time}${sep}${id_ultra}${sep}${usage_ultra}"
 else
-    line1_full="${usage_full}${sep}${id_full}"
-    line1_dense="${usage_dense}${sep}${id_dense}"
-    line1_ultra="${usage_ultra}${sep}${id_ultra}"
+    line1_full="${id_full}${sep}${usage_full}"
+    line1_dense="${id_dense}${sep}${usage_dense}"
+    line1_ultra="${id_ultra}${sep}${usage_ultra}"
 fi
 
 line2_full="${sess_full}"
