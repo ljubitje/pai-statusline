@@ -15,18 +15,21 @@ Dense personal statusline for **[PAI 5.0](https://github.com/danielmiessler/Pers
 | Identity | <span style="color:rgb(30,58,138)">P</span><span style="color:rgb(59,130,246)">A</span><span style="color:rgb(147,197,253)">I</span> | 5.0.0 | PAI version (hidden if latest, outdated segments dimmed) |
 | | <span style="color:rgb(217,119,87)">C</span><span style="color:rgb(191,87,59)">C</span> | 2.1.<span style="color:rgb(99,99,99)">121</span> | Claude Code version (hidden if latest, outdated segments dimmed) |
 | | <span style="color:rgb(70,175,95)">⬤</span> | ok | Claude Code service status |
-| Session | ⏳ | 1h23m | Session time — **hidden by default**, opt-in with `SHOW_TIME=1` |
-| | 📍 | myproject | Starting directory |
-| | 🌳 | <span style="color:rgb(74,222,128)">clean</span> | Git tree state |
+| Thinking (line 1 left) | 💡 | 4h2m | All-time total thinking time across all sessions (model-busy wall-clock — API roundtrip + tool latency + extended thinking + token gen). On by default; opt-out with `statusline.showThinkingTime: false` |
+| Session wall-clock (line 1 left) | ⏳ | 1h23m | Session wall-clock time. **Hidden by default**, opt-in with `SHOW_TIME=1` |
+| Session | 📍 | myproject | Starting directory (locked at session start) |
+| | 🌳 | <span style="color:rgb(74,222,128)">clean</span> | Git tree state (clean / staged / unstaged / untracked) |
+| | 📂 / ✏️ | <span style="color:rgb(150,190,40)">3</span>r <span style="color:rgb(255,193,7)">2</span>w ↳ file.ts | Read / Edit+Write tool calls since the last user prompt; ↳ = last touched file (↗ if outside cwd) |
 | Usage | 🌑🌘🌗🌖🌕 | <span style="color:rgb(255,193,7)">65%</span> | Context moon phase + % (fills as context grows) |
 | | 🔋 | <span style="color:rgb(150,190,40)">97%</span> | 5-hour budget remaining % |
 | | 🔄 | 4h50m | Time to reset (countdown) |
 | | 🗓️ | 6d | Days (or hours, if <24h) until 7-day budget reset (Claude Code ≥2.1.x with native rate_limits) |
+| Thinking (line 2 left) | ⏳ | 14m | Current-session thinking time — model-busy wall-clock for this session only |
 | Learning | 🧠 | <span style="color:rgb(150,190,40)">7.1</span> <span style="color:rgb(150,190,40)">▄</span><span style="color:rgb(255,193,7)">▃</span><span style="color:rgb(150,190,40)">▄</span><span style="color:rgb(70,175,95)">▅</span><span style="color:rgb(150,190,40)">▄</span> | Average rating + sparkbar of last 5 ratings |
 | | ✨ | <span style="color:rgb(150,190,40)">8</span>i | Last rating (i=implicit, e=explicit) |
 | | ⭐/🌟 | 12 | Ratings count (🌟 if rated in last hour) |
 | State | <span style="color:rgb(56,189,248)">❤️</span> <span style="color:rgb(147,197,253)">🪄</span> <span style="color:rgb(59,130,246)">🕊️</span> <span style="color:rgb(96,165,250)">🫂</span> <span style="color:rgb(37,99,235)">🪙</span> | 68% 31% 78% 84% 42% | Telos dimensions from `$PAI_DIR/USER/TELOS/PAI_STATE.json` — Health, Creative, Freedom, Relationships, Money. Missing dims render as `—` |
-| Quote | "…" — | "Strive not to be a success…" —Albert Einstein | Off by default. Opt-in via `.statusline.showQuote: true` in `~/.claude/settings.json`; sourced from `$PAI_DIR/.quote-cache` (ZenQuotes refresh) |
+| Quote | "…" — | "Strive not to be a success…" —Albert Einstein | Off by default. Opt-in via `statusline.showQuote: true` in `~/.claude/settings.json`; sourced from `$PAI_DIR/.quote-cache` (ZenQuotes refresh) |
 
 ## Automatic resizing
 
@@ -111,6 +114,8 @@ The statusline reads configuration from `settings.json`:
 | `principal.timezone` | `UTC` | Your timezone for reset time display (e.g., `America/New_York`) |
 | `pai.version` | `--` | PAI version string |
 | `counts.ratings` | `0` | Total ratings count (populated by PAI stop hooks) |
+| `statusline.showThinkingTime` | `true` | Show 💡 (all-time) and ⏳ (session) thinking-time segments. Set to `false` to disable both. |
+| `statusline.showQuote` | `false` | Render an extra row with the quote from `$PAI_DIR/.quote-cache`. |
 
 ### PAI v5.0 path layout
 
@@ -132,13 +137,14 @@ If you populate `$PAI_DIR/USER/TELOS/PAI_STATE.json` with dimension percentages,
 The script receives JSON from Claude Code via stdin containing session data (context window, model, tokens, etc.). It then:
 
 1. Parses settings + input JSON in two `jq` calls (all data extracted upfront — including the native `.rate_limits` block when CC ≥2.1.x injects it, skipping the OAuth API call entirely)
-2. Launches git status in a background subshell
+2. Launches git rev-parse / branch / last-commit in a background subshell
 3. Sources pre-built `.sh` caches for usage and service status (instant, no parsing)
-4. Detects terminal width and picks the largest density that fits (full → dense → ultradense)
-5. Renders core sections (Identity, Session, Usage, Learning) plus optional rows (State, Counts, Quote) when their source data exists
-6. Fire-and-forget: refreshes usage/status/version caches in background for next render — gated to skip when native rate_limits already supplied the data
+4. Caches per-render heavy work (files block, session thinking-time) by `(session_id, transcript_size)` — append-only JSONL means same size ⇒ same content ⇒ same value, so warm renders skip the jq pass entirely
+5. Detects terminal width and picks the largest density that fits (full → dense → ultradense)
+6. Renders core sections (Identity, Session, Usage, Learning) plus optional rows (State, Quote) when their source data exists
+7. Fire-and-forget: refreshes usage / service status / version caches in background for next render — gated to skip when native rate_limits already supplied the data
 
-Typical render time: ~100ms.
+Typical render time: ~165 ms warm path on a multi-MB transcript; ratings-recompute spike (every 30 s while ratings change) is the remaining cold cost. See `IMPROVE.md` for the queued performance candidates and their trade-offs.
 
 ## Dependencies
 
