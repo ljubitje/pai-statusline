@@ -53,18 +53,21 @@ input=$(cat)
   IFS= read -r COMPACTION_THRESHOLD
   IFS= read -r ratings_count
   IFS= read -r SHOW_QUOTE
+  IFS= read -r SHOW_THINKING_TIME
 } < <(jq -r '
   (.principal.timezone // "UTC"),
   (.pai.version // "—"),
   (.contextDisplay.compactionThreshold // 100 | tostring),
   (.counts.ratings // 0 | tostring),
-  (.statusline.showQuote // false | tostring)
+  (.statusline.showQuote // false | tostring),
+  (.statusline.showThinkingTime // false | tostring)
 ' "$SETTINGS_FILE" 2>/dev/null)
 USER_TZ="${USER_TZ:-UTC}"
 PAI_VERSION="${PAI_VERSION:-—}"
 COMPACTION_THRESHOLD="${COMPACTION_THRESHOLD:-100}"
 SHOW_QUOTE="${SHOW_QUOTE:-false}"
 SHOW_TIME="${SHOW_TIME:-false}"
+SHOW_THINKING_TIME="${SHOW_THINKING_TIME:-false}"
 
 # Extract all data from JSON in single jq call (safe: no eval)
 # Also extracts native rate_limits block (Claude Code ≥2.1.x) — when present,
@@ -695,6 +698,94 @@ if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# THINKING TIME (wall-clock between user/tool→assistant turns; opt-in)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Defines "thinking time" as the wall-clock interval between any preceding
+# message (real user prompt OR returned tool_result, both type:user in the
+# transcript) and the next assistant entry. Includes API roundtrip + tool
+# latency + extended thinking + token generation — i.e. anything that counts
+# as "the model was busy producing output". Per-gap cap of 600s suppresses
+# user-idle (lunch-hour) intervals while still counting any realistic
+# single-turn model latency.
+#
+# Per-session total → MEMORY/STATE/thinking-time/{session_id}.txt (one int).
+# All-time total    → sum across that directory, cached 60s.
+#
+# Display is opt-in via .statusline.showThinkingTime in settings.json.
+THINKING_DIR="$PAI_DIR/MEMORY/STATE/thinking-time"
+THINKING_CACHE="$PAI_DIR/MEMORY/STATE/thinking-cache-${session_id:-default}.txt"
+THINKING_CACHE_TTL=5
+THINKING_ALLTIME_CACHE="$PAI_DIR/MEMORY/STATE/thinking-alltime-cache.txt"
+THINKING_ALLTIME_TTL=60
+
+thinking_full=""; thinking_dense=""
+if [ "$SHOW_THINKING_TIME" = "true" ] && [ -n "$transcript_path" ] && [ -f "$transcript_path" ] && [ -s "$transcript_path" ]; then
+    mkdir -p "$THINKING_DIR" 2>/dev/null
+
+    _think_session=0
+    _think_age=999999
+    [ -f "$THINKING_CACHE" ] && _think_age=$((_NOW - $(get_mtime "$THINKING_CACHE")))
+    if [ "$_think_age" -lt "$THINKING_CACHE_TTL" ]; then
+        _think_session=$(cat "$THINKING_CACHE" 2>/dev/null)
+        _think_session=${_think_session:-0}
+    else
+        _think_session=$(jq -rs '
+          [.[] | select((.type=="user" or .type=="assistant") and .timestamp != null) |
+            {type, ts: (.timestamp | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601)}] |
+          sort_by(.ts) as $m |
+          [range(0; $m|length) as $i |
+            if $i==0 then 0
+            else
+              ($m[$i].ts - $m[$i-1].ts) as $g |
+              if $m[$i].type=="assistant" and $g < 600 and $g >= 0 then $g else 0 end
+            end] | add // 0
+        ' "$transcript_path" 2>/dev/null)
+        _think_session=${_think_session:-0}
+        # Atomic write of cache + per-session record
+        printf '%s' "$_think_session" > "$THINKING_CACHE" 2>/dev/null
+        if [ -n "$session_id" ]; then
+            printf '%s' "$_think_session" > "$THINKING_DIR/${session_id}.txt" 2>/dev/null
+        fi
+    fi
+
+    # All-time aggregate (cached). Sum is over per-session files we maintain.
+    _think_all=0
+    _think_all_age=999999
+    [ -f "$THINKING_ALLTIME_CACHE" ] && _think_all_age=$((_NOW - $(get_mtime "$THINKING_ALLTIME_CACHE")))
+    if [ "$_think_all_age" -lt "$THINKING_ALLTIME_TTL" ]; then
+        _think_all=$(cat "$THINKING_ALLTIME_CACHE" 2>/dev/null)
+        _think_all=${_think_all:-0}
+    else
+        if [ -d "$THINKING_DIR" ]; then
+            _think_all=$(awk '{s+=$1} END{print s+0}' "$THINKING_DIR"/*.txt 2>/dev/null)
+            _think_all=${_think_all:-0}
+        fi
+        printf '%s' "$_think_all" > "$THINKING_ALLTIME_CACHE" 2>/dev/null
+    fi
+
+    # Format helper: seconds → "Nm" or "NhNm"
+    _fmt_thinktime() {
+        local s=$1
+        s=${s%.*}
+        [ -z "$s" ] && s=0
+        local h=$((s / 3600))
+        local m=$((s % 3600 / 60))
+        if [ "$h" -gt 0 ]; then
+            printf '%dh%dm' "$h" "$m"
+        else
+            printf '%dm' "$m"
+        fi
+    }
+
+    _think_session_disp=$(_fmt_thinktime "$_think_session")
+    _think_all_disp=$(_fmt_thinktime "$_think_all")
+
+    # 💭 = all-time total (line1 left). ⏳ = current-session (line2 left).
+    printf -v thinking_total '%b' "💭${SLATE_300}${_think_all_disp}${RESET}"
+    printf -v thinking_sess  '%b' "⏳${SLATE_300}${_think_session_disp}${RESET}"
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # TERMINAL WIDTH + DISPLAY MEASUREMENT
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -923,6 +1014,18 @@ line2_dense="${usage_dense}"
 line2_ultra="${usage_ultra}"
 [ -n "$files_full" ]  && line2_full="${line2_full}${sep}${files_full}"
 [ -n "$files_dense" ] && line2_dense="${line2_dense}${sep}${files_dense}"
+
+# Thinking-time: total on line1 left (💭), session on line2 left (⏳)
+if [ -n "$thinking_total" ]; then
+    line1_full="${thinking_total}${sep}${line1_full}"
+    line1_dense="${thinking_total}${sep}${line1_dense}"
+    line1_ultra="${thinking_total}${sep}${line1_ultra}"
+fi
+if [ -n "$thinking_sess" ]; then
+    line2_full="${thinking_sess}${sep}${line2_full}"
+    line2_dense="${thinking_sess}${sep}${line2_dense}"
+    line2_ultra="${thinking_sess}${sep}${line2_ultra}"
+fi
 
 # Build line3: LEARN on left, then STATE meter (if either exists)
 line3=""

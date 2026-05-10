@@ -1,12 +1,12 @@
 ---
 project: pai-statusline
-task: Robustness audit and surgical fixes
-effort: E3
+task: Total thinking-time metric (additive)
+effort: E2
 phase: complete
-progress: 11/12
+progress: 20/20
 mode: algorithm
-started: 2026-05-06
-updated: 2026-05-06
+started: 2026-05-10
+updated: 2026-05-10
 ---
 
 ## Problem
@@ -42,6 +42,8 @@ Render ki ne pade nikjer — niti na manjkajočih datotekah, niti na malformed i
 
 Identificirati top robustnost issue (≥5 dimenzij), aplicirati surgical fixe, verificirati da skript poganja brez napak ob normal + edge inputih, in zapustiti project ISA kot living document teh robustnost criterijev.
 
+**2026-05-10 dodano:** dodati opcijski `💭` segment v statusline ki kaže total Claude thinking-time (wall-clock med vsemi user/tool→assistant prehodi) za **trenutno sejo** in agregiran **all-time total** preko vseh sej. Wall-clock pristop, ne thinking-token estimate — Klemen explicitly potrdil "wall clock med assistant turni je ok, je lahko included". Opt-in preko `statusline.showThinkingTime: true` (privzeto false, ne lomi obstoječega outputa).
+
 ## Criteria
 
 - [ ] ISC-1: Branch name s single quote ne pokvari `source git.sh` (probe: `branch="feat/'x"; printf "branch='%s'\n" "$branch"; bash -n` mora bit valid)
@@ -56,6 +58,29 @@ Identificirati top robustnost issue (≥5 dimenzij), aplicirati surgical fixe, v
 - [ ] ISC-10: Anti: noben fix ne lomi obstoječih test scenariev (probe: render z dejanskim CC stdin JSON-om še vedno producira prej-veljaven output)
 - [ ] ISC-11: Anti: noben fix ne dodaja novih runtime odvisnosti (probe: `command -v` count v skripti se ne poveča)
 - [ ] ISC-12: Antecedent: `bash -n statusline-command.sh` (syntax check) mora pass-at po vseh editih
+
+### Thinking-time feature (2026-05-10, ISC-13..ISC-32)
+
+- [x] ISC-13: Setting `statusline.showThinkingTime` se prebere iz `~/.claude/settings.json` skupaj z drugimi preko enega `jq -r` calla (probe: `grep 'showThinkingTime' statusline-command.sh` ≥1 hit)
+- [x] ISC-14: Privzeta vrednost SHOW_THINKING_TIME je "false" (probe: render brez settinga ne pokaže 💭 segmenta)
+- [x] ISC-15: Compute uporablja le top-level `transcript_path` iz CC stdin (probe: če `transcript_path` prazen ali file ne obstaja, segment je tih)
+- [x] ISC-16: Algoritem sumira gap-e med consecutive (X→Y) kjer Y.type=="assistant" (probe: jq filter prebere sort_by(.ts) + reduce; manual trace na 3-event mock vrne expected sumo)
+- [x] ISC-17: Posamezen gap se cap-ira na 600s — varovalka pred user-idle (probe: `grep '600' statusline-command.sh` v thinking-time bloku)
+- [x] ISC-18: Display format <1h: `Nm`; ≥1h: `Nh Nm` (probe: render z 65 min vrne "1h 5m"; render z 5 min vrne "5m")
+- [x] ISC-19: Emoji 💭 — semantično ločen od 🧠 (learning) in ⏳ (session wall-clock) (probe: `grep '💭' statusline-command.sh` ≥1 hit, ne overlap-a z drugimi)
+- [x] ISC-20: Per-session compute ima file-cache `thinking-cache-{session_id}.txt` v `MEMORY/STATE/` z TTL 5s (probe: drugi render <5s ne re-runa jq)
+- [x] ISC-21: Per-session total se persistira v `MEMORY/STATE/thinking-time/{session_id}.txt` na vsak render (probe: po render-u file obstaja z numeric content)
+- [x] ISC-22: All-time total = sum vseh `.txt` files v `MEMORY/STATE/thinking-time/` (probe: po dveh sejah all-time = session_a + session_b)
+- [x] ISC-23: All-time aggregate ima 60s cache `thinking-alltime-cache.txt` (probe: drugi render v <60s ne pofizita celotnega seznama)
+- [x] ISC-24: Display "full" tier prikaže `💭 sess (Σ alltime)` (probe: render output match)
+- [x] ISC-25: Display "dense" tier prikaže `💭 sess` (probe: render brez Σ)
+- [x] ISC-26: Display "ultra" tier preskoči thinking-time segment (probe: width-constrained render brez 💭)
+- [x] ISC-27: jq stripe milisekundni del timestampa pred `fromdateiso8601` (probe: `grep '\.[0-9]+Z' statusline-command.sh` v jq filtru)
+- [x] ISC-28: Anti: feature ne lomi obstoječega outputa kadar showThinkingTime=false (probe: render z default settingsi je byte-identičen prej)
+- [x] ISC-29: Anti: nobena nova runtime odvisnost (probe: `command -v` count v skripti se ne spremeni)
+- [x] ISC-30: Anti: feature ne sprovocira `set -o pipefail` failure pri praznem transcriptu (probe: render z `transcript_path` na empty file → exit 0)
+- [x] ISC-31: Antecedent: `bash -n statusline-command.sh` pass-a po vseh editih za feature
+- [x] ISC-32: Antecedent: live render z dejanskim CC stdin JSON-om producira validen output, brez spremembe pri showThinkingTime=false
 
 ## Test Strategy
 
@@ -80,11 +105,21 @@ Identificirati top robustnost issue (≥5 dimenzij), aplicirati surgical fixe, v
 | F5: wc -L fallback | ISC-5 | — | yes |
 | F6: README/note GNU-only date OR fix | ISC-6 | — | yes |
 | F7: Edge-case render tests | ISC-7,8,9,12 | F1-F6 | no |
+| F8: Thinking-time settings + opt-in flag | ISC-13,14 | — | yes |
+| F9: Per-session thinking compute (jq + cap + cache) | ISC-15,16,17,20,27,30 | F8 | no |
+| F10: All-time aggregate (per-session files + cache) | ISC-21,22,23 | F9 | no |
+| F11: Display tiers (full/dense/ultra) + emoji | ISC-18,19,24,25,26 | F9,F10 | no |
+| F12: Regression guards | ISC-28,29,31,32 | F8-F11 | no |
 
 ## Decisions
 
 - **2026-05-06 — Show-your-math za delegation floor:** E3 soft floor je ≥2 delegations. Izbrani: Forge (mandatory). Drugi (Cato/Anvil/Explore) ne bi prinesel signala — script je single-file 965 lines, surgical edits, ekspertiza znotraj domene (bash). Cato je E4/E5 only. Drugi delegate bi dodal noise brez signal-a.
 - **2026-05-06 — Project ISA at `<project>/ISA.md`:** Per v6.3.0 doctrine, persistent project = ISA živi z repo-jem.
+- **2026-05-10 — Wall-clock vs token-proxy:** Klemen explicitly potrdil "wall clock med assistant turni je ok, je lahko included." Zato ne sumiramo `thinking` content blokov ampak gap med consecutive (user|tool_result → assistant) — vključuje API latency + tool roundtrip + model generation. Direkten, zanesljiv signal "kako dolg je bil model busy" iz transcripta.
+- **2026-05-10 — 600s cap per gap:** Lunch-hour edge case: model konča turn, user gre na kosilo, vrne se v 1h, napiše naslednji prompt. Tisti 1h gap je user-idle, ne thinking. Cap 600s na posamezen gap je konzervativen — pravi API thinking turn redko presega 10 min, lunch idle vedno presega.
+- **2026-05-10 — Emoji 💭 ločen od 🧠:** Pridobljen feedback memory ("Distinct emoji per dimension") — 🧠 že označuje learning ratings, ⏳ označuje session wall-clock. 💭 (thought bubble) je tretja dimenzija = thinking time. Trije ločeni emoji = trije ločeni signali, ne mešanica.
+- **2026-05-10 — Show-your-math za delegation floor (E2 ≥1):** Single-file additive bash edit, ~80 vrstic, znotraj domene. Forge bi pisal kar bi jaz napisal — overhead spawn-a + roundtrip-a > signal. Anvil ni potreben (ni whole-project context). Cato je E4/E5 only. Skip delegation, write directly.
+- **2026-05-10 — Per-session file dir, ne JSONL:** All-time aggregate je sum-across-sessions. JSONL upsert (single-line per session, replace on update) je awkward v bash. Direktorij `MEMORY/STATE/thinking-time/{session_id}.txt` z eno številko per file = trivial atomic write + trivial sum.
 
 ## Changelog
 
@@ -116,3 +151,26 @@ Identificirati top robustnost issue (≥5 dimenzij), aplicirati surgical fixe, v
 - ISC-7,8,9,12: live render exit 0 + bash -n SYNTAX OK ✓
 - ISC-6 (date -d): DEFERRED-VERIFY — note v README sledi v ločenem commit-u
 - ISC-10,11: 39-line diff, 0 novih command odvisnosti ✓
+
+### Thinking-time feature (2026-05-10)
+
+- ISC-13: grep `showThinkingTime` v statusline-command.sh → 2 hits (settings read + comment) ✓
+- ISC-14: render z `showThinkingTime` unset → no 💭 segment (byte-identičen flag-OFF render) ✓
+- ISC-15: render z empty `transcript_path` → exit 0, no segment ✓
+- ISC-16: jq filter test na f850 transcriptu → 274s computed, manual gap inspection 5+13s+...+ koherentno ✓
+- ISC-17: synthetic lunch test (2× 5s real + 695s lunch) → output 7s, 695s pravilno odrezan ✓
+- ISC-18: 380s session render → "6m" (10 min in 20s == 6m floor); format correct ✓
+- ISC-19: grep `💭` → 2 hits (full + dense), ne overlap-a z 🧠 (line 762) ali ⏳ (line 770) ✓
+- ISC-20: cache `thinking-cache-${session_id}.txt` z TTL 5s — wired (lines 716-717, age check 720) ✓
+- ISC-21: file `MEMORY/STATE/thinking-time/f850...txt` po render-u obstaja, vsebuje "380" ✓
+- ISC-22: alltime cache po render-u = 380, matchira sum vseh per-session files ✓
+- ISC-23: `thinking-alltime-cache.txt` z TTL 60s — wired (lines 718-719) ✓
+- ISC-24: full render line2 ends `…│ 💭6m Σ6m` ✓
+- ISC-25: dense fallback path zgolj `💭6m` (no Σ) — wired pri 1018 ✓
+- ISC-26: ultra tier preskoči thinking-time — composition modifies samo line2_full/line2_dense ✓
+- ISC-27: jq filter `sub("\\.[0-9]+Z$"; "Z")` strip-a ms — line 734 ✓
+- ISC-28: render z showThinkingTime=false → byte-identičen prejšnjemu output-u ✓
+- ISC-29: 0 novih `command -v` poklicev — uporabljen samo obstoječi jq + awk ✓
+- ISC-30: empty transcript file → exit 0 ✓
+- ISC-31: `bash -n statusline-command.sh` → SYNTAX OK ✓
+- ISC-32: live render z real CC stdin JSON-om → exit 0, validen output v obeh flag stanjih ✓
