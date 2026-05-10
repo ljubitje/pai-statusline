@@ -119,11 +119,11 @@ echo "$model_name" > "$MODEL_CACHE" 2>/dev/null
 # change the displayed dir (statusline shows where the session began).
 SESSION_STARTDIR_FILE="/tmp/pai-session-startdir-${session_id:-$$}"
 if [ ! -f "$SESSION_STARTDIR_FILE" ]; then
-    printf '%s' "${current_dir:-.}" > "$SESSION_STARTDIR_FILE"
+    printf '%s\n' "${current_dir:-.}" > "$SESSION_STARTDIR_FILE"
 fi
-start_dir=$(cat "$SESSION_STARTDIR_FILE" 2>/dev/null)
+IFS= read -r start_dir < "$SESSION_STARTDIR_FILE" || true
 [ -z "$start_dir" ] && start_dir="${current_dir:-.}"
-dir_name=$(basename "$start_dir")
+dir_name="${start_dir##*/}"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SESSION WALL-CLOCK TIME
@@ -135,7 +135,8 @@ SESSION_START_FILE="/tmp/pai-session-start-${session_id:-$$}"
 if [ ! -f "$SESSION_START_FILE" ]; then
     echo "$_NOW" > "$SESSION_START_FILE"
 fi
-_session_start=$(cat "$SESSION_START_FILE")
+IFS= read -r _session_start < "$SESSION_START_FILE" || true
+[ -z "$_session_start" ] && _session_start=$_NOW
 _session_now=$_NOW
 _session_elapsed=$((_session_now - _session_start))
 _sess_h=$((_session_elapsed / 3600))
@@ -410,9 +411,12 @@ if [ "$is_git_repo" = "true" ]; then
         tree_display="${TREE_COLOR_CLEAN}clean${RESET}"
     else
         has_staged=false; has_unstaged=false; has_untracked=false
-        echo "$porcelain" | grep -q '^[MADRC]' && has_staged=true
-        echo "$porcelain" | grep -q '^.[MDRC]' && has_unstaged=true
-        echo "$porcelain" | grep -q '^??' && has_untracked=true
+        read -r has_staged has_unstaged has_untracked < <(echo "$porcelain" | awk '
+            /^\?\?/{t=1}
+            /^[MADRC]/{s=1}
+            /^.[MDRC]/{u=1}
+            END{print (s?"true":"false"), (u?"true":"false"), (t?"true":"false")}
+        ')
         # Priority: untracked > unstaged > staged
         if [ "$has_untracked" = true ]; then
             tree_display="${TREE_COLOR_UNTRACKED}untracked${RESET}"
@@ -644,12 +648,29 @@ fi
 # are NOT counted here (they don't enter Val's main context).
 files_full=""; files_dense=""
 if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
-    # UUID of last real user prompt (text content, not tool_result)
-    _last_user_uuid=$(jq -r '
-      select(.type=="user" and ((.message.content | type=="string") or .message.content[0]?.type=="text")) | .uuid
-    ' "$transcript_path" 2>/dev/null | tail -1)
+    # Cache by transcript size: while transcript is unchanged, the UUID + tool_use
+    # counts cannot have changed. Any append (new user msg, new tool_use within turn)
+    # bumps the size and invalidates the cache. Per-session to avoid cross-session
+    # collisions; skipped entirely when session_id is empty (would race per-render).
+    FILES_CACHE_SH=""
+    [ -n "$session_id" ] && FILES_CACHE_SH="$PAI_DIR/MEMORY/STATE/files-cache-${session_id}.sh"
+    _tx_size=$(stat -c %s "$transcript_path" 2>/dev/null || stat -f %z "$transcript_path" 2>/dev/null)
+    _tx_size="${_tx_size:-0}"
 
-    if [ -n "$_last_user_uuid" ]; then
+    _files_cached_size=""
+    if [ -n "$FILES_CACHE_SH" ] && [ -f "$FILES_CACHE_SH" ]; then
+        # shellcheck disable=SC1090
+        source "$FILES_CACHE_SH" 2>/dev/null
+    fi
+
+    if [ "${_files_cached_size:-}" != "$_tx_size" ]; then
+        files_full=""; files_dense=""
+        # UUID of last real user prompt (text content, not tool_result)
+        _last_user_uuid=$(jq -r '
+          select(.type=="user" and ((.message.content | type=="string") or .message.content[0]?.type=="text")) | .uuid
+        ' "$transcript_path" 2>/dev/null | tail -1)
+
+        if [ -n "$_last_user_uuid" ]; then
         # Slice transcript: only entries after the line containing last user UUID.
         # awk skip-until pattern is faster than slurping everything into jq.
         # `last | .fp` is null-guarded for empty $tools — Forge H3 catch.
@@ -676,7 +697,7 @@ if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
                 "$current_dir"/*|"$current_dir") ;;
                 *) _files_arrow="↗" ;;
             esac
-            _files_last_base=$(basename "$_files_last_fp")
+            _files_last_base="${_files_last_fp##*/}"
         fi
 
         # Color: lime/yellow when active, dim slate when zero
@@ -694,7 +715,16 @@ if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
         else
             files_full="$files_dense"
         fi
-    fi
+        fi  # end: if [ -n "$_last_user_uuid" ]
+
+        # Persist cache. printf %q safely escapes ANSI escapes (\033) — sourcing
+        # restores the exact byte sequence (memory: source-eval files need %q).
+        if [ -n "$FILES_CACHE_SH" ]; then
+            mkdir -p "$(dirname "$FILES_CACHE_SH")" 2>/dev/null
+            printf '_files_cached_size=%s\nfiles_full=%q\nfiles_dense=%q\n' \
+                "$_tx_size" "$files_full" "$files_dense" > "$FILES_CACHE_SH" 2>/dev/null
+        fi
+    fi  # end: cache-miss compute
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -714,7 +744,6 @@ fi
 # Display is on by default; disable via .statusline.showThinkingTime=false in settings.json.
 THINKING_DIR="$PAI_DIR/MEMORY/STATE/thinking-time"
 THINKING_CACHE="$PAI_DIR/MEMORY/STATE/thinking-cache-${session_id:-default}.txt"
-THINKING_CACHE_TTL=5
 THINKING_ALLTIME_CACHE="$PAI_DIR/MEMORY/STATE/thinking-alltime-cache.txt"
 THINKING_ALLTIME_TTL=60
 
@@ -722,12 +751,19 @@ thinking_full=""; thinking_dense=""
 if [ "$SHOW_THINKING_TIME" = "true" ] && [ -n "$transcript_path" ] && [ -f "$transcript_path" ] && [ -s "$transcript_path" ]; then
     mkdir -p "$THINKING_DIR" 2>/dev/null
 
+    # Cache by transcript size (same pattern as files block). JSONL is append-only:
+    # identical size ⇒ identical content ⇒ identical computed value. Cache file
+    # format "size:value"; old TTL-format files (bare int) self-migrate on first
+    # miss because IFS=: split leaves _cs_value empty → triggers recompute.
     _think_session=0
-    _think_age=999999
-    [ -f "$THINKING_CACHE" ] && _think_age=$((_NOW - $(get_mtime "$THINKING_CACHE")))
-    if [ "$_think_age" -lt "$THINKING_CACHE_TTL" ]; then
-        _think_session=$(cat "$THINKING_CACHE" 2>/dev/null)
-        _think_session=${_think_session:-0}
+    _think_tx_size="${_tx_size:-$(stat -c %s "$transcript_path" 2>/dev/null || stat -f %z "$transcript_path" 2>/dev/null)}"
+    _think_tx_size="${_think_tx_size:-0}"
+    _cs_size=""; _cs_value=""
+    if [ -f "$THINKING_CACHE" ]; then
+        IFS=: read -r _cs_size _cs_value < "$THINKING_CACHE" || true
+    fi
+    if [ -n "$_cs_value" ] && [ "$_cs_size" = "$_think_tx_size" ]; then
+        _think_session=$_cs_value
     else
         _think_session=$(jq -rs '
           [.[] | select((.type=="user" or .type=="assistant") and .timestamp != null) |
@@ -741,8 +777,7 @@ if [ "$SHOW_THINKING_TIME" = "true" ] && [ -n "$transcript_path" ] && [ -f "$tra
             end] | add // 0
         ' "$transcript_path" 2>/dev/null)
         _think_session=${_think_session:-0}
-        # Atomic write of cache + per-session record
-        printf '%s' "$_think_session" > "$THINKING_CACHE" 2>/dev/null
+        printf '%s:%s' "$_think_tx_size" "$_think_session" > "$THINKING_CACHE" 2>/dev/null
         if [ -n "$session_id" ]; then
             printf '%s' "$_think_session" > "$THINKING_DIR/${session_id}.txt" 2>/dev/null
         fi
@@ -780,8 +815,8 @@ if [ "$SHOW_THINKING_TIME" = "true" ] && [ -n "$transcript_path" ] && [ -f "$tra
     _think_session_disp=$(_fmt_thinktime "$_think_session")
     _think_all_disp=$(_fmt_thinktime "$_think_all")
 
-    # 💭 = all-time total (line1 left). ⏳ = current-session (line2 left).
-    printf -v thinking_total '%b' "💭${SLATE_300}${_think_all_disp}${RESET}"
+    # 💡 = all-time total (line1 left). ⏳ = current-session (line2 left).
+    printf -v thinking_total '%b' "💡${SLATE_300}${_think_all_disp}${RESET}"
     printf -v thinking_sess  '%b' "⏳${SLATE_300}${_think_session_disp}${RESET}"
 fi
 
@@ -1000,9 +1035,9 @@ printf -v sep '%b' " ${SLATE_600}│${RESET} "
 # line2: USAGE bar
 # line3: LEARN + STATE
 if [ -n "$sess_time" ]; then
-    line1_full="${sess_time}${sep}${id_full}${sep}${sess_full}"
-    line1_dense="${sess_time}${sep}${id_dense}${sep}${sess_dense}"
-    line1_ultra="${sess_time}${sep}${id_ultra}${sep}${sess_ultra}"
+    line1_full="${sess_time} ${id_full}${sep}${sess_full}"
+    line1_dense="${sess_time} ${id_dense}${sep}${sess_dense}"
+    line1_ultra="${sess_time} ${id_ultra}${sep}${sess_ultra}"
 else
     line1_full="${id_full}${sep}${sess_full}"
     line1_dense="${id_dense}${sep}${sess_dense}"
@@ -1015,11 +1050,11 @@ line2_ultra="${usage_ultra}"
 [ -n "$files_full" ]  && line2_full="${line2_full}${sep}${files_full}"
 [ -n "$files_dense" ] && line2_dense="${line2_dense}${sep}${files_dense}"
 
-# Thinking-time: total on line1 left (💭), session on line2 left (⏳)
+# Thinking-time: total on line1 left (💡), session on line2 left (⏳)
 if [ -n "$thinking_total" ]; then
-    line1_full="${thinking_total}${sep}${line1_full}"
-    line1_dense="${thinking_total}${sep}${line1_dense}"
-    line1_ultra="${thinking_total}${sep}${line1_ultra}"
+    line1_full="${thinking_total} ${line1_full}"
+    line1_dense="${thinking_total} ${line1_dense}"
+    line1_ultra="${thinking_total} ${line1_ultra}"
 fi
 if [ -n "$thinking_sess" ]; then
     line2_full="${thinking_sess}${sep}${line2_full}"
