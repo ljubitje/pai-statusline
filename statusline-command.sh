@@ -60,14 +60,14 @@ input=$(cat)
   (.contextDisplay.compactionThreshold // 100 | tostring),
   (.counts.ratings // 0 | tostring),
   (.statusline.showQuote // false | tostring),
-  (.statusline.showThinkingTime // false | tostring)
+  (.statusline.showThinkingTime // true | tostring)
 ' "$SETTINGS_FILE" 2>/dev/null)
 USER_TZ="${USER_TZ:-UTC}"
 PAI_VERSION="${PAI_VERSION:-—}"
 COMPACTION_THRESHOLD="${COMPACTION_THRESHOLD:-100}"
 SHOW_QUOTE="${SHOW_QUOTE:-false}"
 SHOW_TIME="${SHOW_TIME:-false}"
-SHOW_THINKING_TIME="${SHOW_THINKING_TIME:-false}"
+SHOW_THINKING_TIME="${SHOW_THINKING_TIME:-true}"
 
 # Extract all data from JSON in single jq call (safe: no eval)
 # Also extracts native rate_limits block (Claude Code ≥2.1.x) — when present,
@@ -698,7 +698,7 @@ if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# THINKING TIME (wall-clock between user/tool→assistant turns; opt-in)
+# THINKING TIME (wall-clock between user/tool→assistant turns; on by default, opt-out)
 # ═══════════════════════════════════════════════════════════════════════════════
 # Defines "thinking time" as the wall-clock interval between any preceding
 # message (real user prompt OR returned tool_result, both type:user in the
@@ -711,7 +711,7 @@ fi
 # Per-session total → MEMORY/STATE/thinking-time/{session_id}.txt (one int).
 # All-time total    → sum across that directory, cached 60s.
 #
-# Display is opt-in via .statusline.showThinkingTime in settings.json.
+# Display is on by default; disable via .statusline.showThinkingTime=false in settings.json.
 THINKING_DIR="$PAI_DIR/MEMORY/STATE/thinking-time"
 THINKING_CACHE="$PAI_DIR/MEMORY/STATE/thinking-cache-${session_id:-default}.txt"
 THINKING_CACHE_TTL=5
