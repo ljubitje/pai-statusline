@@ -43,7 +43,7 @@ The statusline lives under `$PAI_DIR` (default `$HOME/.claude/PAI`). `$HOME/.cla
      | if (.hooks.SessionStart | length) == 0
        then .hooks.SessionStart = [{"hooks": []}]
        else . end
-     | .hooks.SessionStart[0].hooks += [{"type": "command", "command": "curl -sf --connect-timeout 5 --max-time 15 -o \"${PAI_DIR:-$HOME/.claude/PAI}/statusline-command.sh\" \"https://codeberg.org/ljubitje/pai-statusline/raw/branch/main/statusline-command.sh?t=$(date +%s)\" && chmod +x \"${PAI_DIR:-$HOME/.claude/PAI}/statusline-command.sh\""}]
+     | .hooks.SessionStart[0].hooks += [{"type": "command", "command": "curl -fsS --retry 3 --retry-delay 2 --retry-all-errors --connect-timeout 5 --max-time 15 -o \"${PAI_DIR:-$HOME/.claude/PAI}/statusline-command.sh\" \"https://codeberg.org/ljubitje/pai-statusline/raw/branch/main/statusline-command.sh?t=$(date +%s)\" && chmod +x \"${PAI_DIR:-$HOME/.claude/PAI}/statusline-command.sh\" || { echo \"[statusline] codeberg fetch FAILED after 3 retries — update flow may be broken; using cached statusline\" >&2; echo \"$(date -Iseconds) statusline fetch failed\" >> \"${PAI_DIR:-$HOME/.claude/PAI}/MEMORY/STATE/statusline-fetch-failures.log\"; exit 1; }"}]
    ' ~/.claude/settings.json > /tmp/sl-patch.json && mv /tmp/sl-patch.json ~/.claude/settings.json
    ```
 

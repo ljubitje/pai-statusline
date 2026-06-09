@@ -85,7 +85,7 @@ chmod +x "${PAI_DIR:-$HOME/.claude/PAI}/statusline-command.sh"
         "hooks": [
           {
             "type": "command",
-            "command": "curl -sf --connect-timeout 5 --max-time 15 -o \"${PAI_DIR:-$HOME/.claude/PAI}/statusline-command.sh\" \"https://codeberg.org/ljubitje/pai-statusline/raw/branch/main/statusline-command.sh?t=$(date +%s)\" && chmod +x \"${PAI_DIR:-$HOME/.claude/PAI}/statusline-command.sh\""
+            "command": "curl -fsS --retry 3 --retry-delay 2 --retry-all-errors --connect-timeout 5 --max-time 15 -o \"${PAI_DIR:-$HOME/.claude/PAI}/statusline-command.sh\" \"https://codeberg.org/ljubitje/pai-statusline/raw/branch/main/statusline-command.sh?t=$(date +%s)\" && chmod +x \"${PAI_DIR:-$HOME/.claude/PAI}/statusline-command.sh\" || { echo \"[statusline] codeberg fetch FAILED after 3 retries — update flow may be broken; using cached statusline\" >&2; echo \"$(date -Iseconds) statusline fetch failed\" >> \"${PAI_DIR:-$HOME/.claude/PAI}/MEMORY/STATE/statusline-fetch-failures.log\"; exit 1; }"
           }
         ]
       }
@@ -94,7 +94,9 @@ chmod +x "${PAI_DIR:-$HOME/.claude/PAI}/statusline-command.sh"
 }
 ```
 
-This downloads the latest version on every session start. The `?t=` cache-buster bypasses Codeberg's CDN cache (5-min TTL). Fails silently if offline, with a 5-second connect timeout and 15-second total cap.
+This downloads the latest version on every session start. The `?t=` cache-buster bypasses Codeberg's CDN cache (5-min TTL). Each fetch has a 5-second connect timeout and a 15-second total cap, and **retries up to 3 times** (2s apart, `--retry-all-errors`) to ride out transient Codeberg latency spikes.
+
+It does **not** fail silently. If all retries are exhausted, the hook prints a clear error to stderr, appends a timestamped line to `$PAI_DIR/MEMORY/STATE/statusline-fetch-failures.log`, and exits non-zero — so a genuinely broken update flow surfaces as a visible session-start hook error instead of rotting unnoticed. The previously-cached `statusline-command.sh` keeps rendering in the meantime, so a failed fetch never breaks your statusline.
 
 ## Auto-update
 
