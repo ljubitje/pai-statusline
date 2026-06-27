@@ -155,11 +155,14 @@ _parallel_tmp="/tmp/pai-parallel-$$"
 mkdir -p "$_parallel_tmp"
 
 # Background subshell for git only (counts now extracted in settings jq above)
-# All git calls use `-C "$current_dir"` so foreground porcelain check (line ~399)
-# and these branch/last-commit reads agree on the same git root. Branch name is
-# emitted via printf %q so a branch like `feat/'oops` can't break `source git.sh`.
+# All git calls use `-C "$start_dir"` (the session-START dir, NOT the live cwd):
+# the repo/branch/tree display stays pinned to where the session began and matches
+# the displayed dir_name, so an in-session `cd` — or a cwd that got deleted —
+# no longer flips the statusline to "no repo". Foreground porcelain check
+# (~line 409) uses the same start_dir so both git reads agree on one root. Branch
+# name is emitted via printf %q so a branch like `feat/'oops` can't break `source git.sh`.
 {
-    _gdir="${current_dir:-.}"
+    _gdir="${start_dir:-.}"
     if git -C "$_gdir" rev-parse --git-dir > /dev/null 2>&1; then
         _branch=$(git -C "$_gdir" branch --show-current 2>/dev/null)
         [ -z "$_branch" ] && _branch="detached"
@@ -406,7 +409,7 @@ TREE_COLOR_UNSTAGED="$ROSE"                 # Red (same as untracked)
 TREE_COLOR_UNTRACKED="$ROSE"
 tree_display=""
 if [ "$is_git_repo" = "true" ]; then
-    porcelain=$(git -C "$current_dir" status --porcelain 2>/dev/null)
+    porcelain=$(git -C "$start_dir" status --porcelain 2>/dev/null)
     if [ -z "$porcelain" ]; then
         tree_display="${TREE_COLOR_CLEAN}clean${RESET}"
     else
