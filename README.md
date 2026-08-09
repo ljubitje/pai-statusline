@@ -1,10 +1,10 @@
-# PAI statusline
+# LifeOS statusline
 
-Dense personal statusline for **[PAI 5.0](https://github.com/danielmiessler/Personal_AI_Infrastructure)**, using [Claude Code](https://claude.com/product/claude-code). Renders identity + session on line 1, usage on line 2, and an optional learning + Telos-state row on line 3. A quote row is also available behind a flag.
+Dense personal statusline for **[LifeOS 7.1.1](https://github.com/danielmiessler/LifeOS)**, using [Claude Code](https://claude.com/product/claude-code). Renders identity + session on line 1, usage on line 2, and an optional learning + Telos-state row on line 3. A quote row is also available behind a flag.
 
-> Built for the PAI 5.0 path layout: `CLAUDE_HOME` (`$HOME/.claude`) holds Claude-Code–managed files; `PAI_DIR` (`$CLAUDE_HOME/PAI`) holds PAI assets — including this script. Pre-5.0 layouts are not supported; see git history for the legacy script.
+> Built for the LOS 7.1.1 path layout: `CLAUDE_HOME` (`$HOME/.claude`) holds Claude-Code–managed files; `LIFEOS_DIR` (`$CLAUDE_HOME/LIFEOS`) holds LifeOS assets — including this script. Pre-5.0 layouts are not supported; see git history for the legacy script.
 
-<img src="screenshot.png" alt="PAI statusline screenshot" width="810">
+<img src="screenshot.png" alt="LifeOS statusline screenshot" width="810">
 
 > ⚠️ Screenshots in this README are auto-generated (chromium headless render via Noto Color Emoji) — emoji aesthetics differ from a real terminal. Real terminal captures coming once the dev wakes up.
 
@@ -12,7 +12,7 @@ Dense personal statusline for **[PAI 5.0](https://github.com/danielmiessler/Pers
 
 | Section | Symbol | Example | Info |
 |---------|--------|---------|------|
-| Identity | <span style="color:rgb(30,58,138)">P</span><span style="color:rgb(59,130,246)">A</span><span style="color:rgb(147,197,253)">I</span> | 5.0.0 | PAI version (hidden if latest, outdated segments dimmed) |
+| Identity | <span style="color:rgb(30,58,138)">L</span><span style="color:rgb(59,130,246)">O</span><span style="color:rgb(147,197,253)">S</span> | 7.1.1 | LOS version (hidden if latest, outdated segments dimmed) |
 | | <span style="color:rgb(217,119,87)">C</span><span style="color:rgb(191,87,59)">C</span> | 2.1.<span style="color:rgb(99,99,99)">121</span> | Claude Code version (hidden if latest, outdated segments dimmed) |
 | | <span style="color:rgb(70,175,95)">⬤</span> | ok | Claude Code service status |
 | Thinking (line 1 left) | 💡 | 4h2m | All-time total thinking time across all sessions (model-busy wall-clock — API roundtrip + tool latency + extended thinking + token gen). On by default; opt-out with `statusline.showThinkingTime: false` |
@@ -28,8 +28,8 @@ Dense personal statusline for **[PAI 5.0](https://github.com/danielmiessler/Pers
 | Learning | 🧠 | <span style="color:rgb(150,190,40)">7.1</span> <span style="color:rgb(150,190,40)">▄</span><span style="color:rgb(255,193,7)">▃</span><span style="color:rgb(150,190,40)">▄</span><span style="color:rgb(70,175,95)">▅</span><span style="color:rgb(150,190,40)">▄</span> | Average rating + sparkbar of last 5 ratings |
 | | ✨ | <span style="color:rgb(150,190,40)">8</span>i | Last rating (i=implicit, e=explicit) |
 | | ⭐/🌟 | 12 | Ratings count (🌟 if rated in last hour) |
-| State | <span style="color:rgb(56,189,248)">❤️</span> <span style="color:rgb(147,197,253)">🪄</span> <span style="color:rgb(59,130,246)">🕊️</span> <span style="color:rgb(96,165,250)">🫂</span> <span style="color:rgb(37,99,235)">🪙</span> | 68% 31% 78% 84% 42% | Telos dimensions from `$PAI_DIR/USER/TELOS/PAI_STATE.json` — Health, Creative, Freedom, Relationships, Money. Missing dims render as `—` |
-| Quote | "…" — | "Strive not to be a success…" —Albert Einstein | Off by default. Opt-in via `statusline.showQuote: true` in `~/.claude/settings.json`; sourced from `$PAI_DIR/.quote-cache` (ZenQuotes refresh) |
+| State | <span style="color:rgb(56,189,248)">❤️</span> <span style="color:rgb(147,197,253)">🪄</span> <span style="color:rgb(59,130,246)">🕊️</span> <span style="color:rgb(96,165,250)">🫂</span> <span style="color:rgb(37,99,235)">🪙</span> | 68% 31% 78% 84% 42% | Telos dimensions from `$LIFEOS_DIR/USER/TELOS/LIFEOS_STATE.json` — Health, Creative, Freedom, Relationships, Money. Missing dims render as `—` |
+| Quote | "…" — | "Strive not to be a success…" —Albert Einstein | Off by default. Opt-in via `statusline.showQuote: true` in `~/.claude/settings.json`; sourced from `$LIFEOS_DIR/.quote-cache` (ZenQuotes refresh) |
 
 ## Automatic resizing
 
@@ -44,38 +44,38 @@ The statusline adapts to your terminal width, picking the largest statusline tha
 **ultradense**<br>
 <img src="tier-ultradense.png" alt="ultradense density" width="645">
 
-## Installation via PAI (recommended)
+## Installation via LifeOS (recommended)
 
-In any PAI session, say:
+In any LifeOS session, say:
 
-> Install codeberg.org/ljubitje/pai-statusline
+> Install codeberg.org/ljubitje/lifeos-statusline
 
-PAI will clone the repo, read the setup instructions, and handle the rest.
+LifeOS will clone the repo, read the setup instructions, and handle the rest.
 
 ## Installation via manual labour
 
-The statusline script lives under `$PAI_DIR` (default `$HOME/.claude/PAI`) — alongside the rest of your PAI-shipped assets. `$HOME/.claude` (`CLAUDE_HOME`) holds only Claude-Code–managed files (`settings.json`, `hooks/`).
+The statusline script lives under `$LIFEOS_DIR` (default `$HOME/.claude/LIFEOS`) — alongside the rest of your LifeOS-shipped assets. `$HOME/.claude` (`CLAUDE_HOME`) holds only Claude-Code–managed files (`settings.json`, `hooks/`).
 
 1. Copy the script:
 
 ```bash
-mkdir -p "${PAI_DIR:-$HOME/.claude/PAI}"
-cp statusline-command.sh "${PAI_DIR:-$HOME/.claude/PAI}/statusline-command.sh"
-chmod +x "${PAI_DIR:-$HOME/.claude/PAI}/statusline-command.sh"
+mkdir -p "${LIFEOS_DIR:-$HOME/.claude/LIFEOS}"
+cp statusline-command.sh "${LIFEOS_DIR:-$HOME/.claude/LIFEOS}/statusline-command.sh"
+chmod +x "${LIFEOS_DIR:-$HOME/.claude/LIFEOS}/statusline-command.sh"
 ```
 
-2. Add to `~/.claude/settings.json` (create the file with `{}` if it doesn't exist). Use the absolute path that `${PAI_DIR:-$HOME/.claude/PAI}` resolves to on your system — Claude Code does not expand env vars in this field:
+2. Add to `~/.claude/settings.json` (create the file with `{}` if it doesn't exist). Use the absolute path that `${LIFEOS_DIR:-$HOME/.claude/LIFEOS}` resolves to on your system — Claude Code does not expand env vars in this field:
 
 ```json
 {
   "statusLine": {
     "type": "command",
-    "command": "/absolute/path/to/PAI/statusline-command.sh"
+    "command": "/absolute/path/to/LIFEOS/statusline-command.sh"
   }
 }
 ```
 
-3. Add the auto-update hook to `~/.claude/settings.json` under `hooks.SessionStart`. The hook command runs in a shell, so `$PAI_DIR` does expand here:
+3. Add the auto-update hook to `~/.claude/settings.json` under `hooks.SessionStart`. The hook command runs in a shell, so `$LIFEOS_DIR` does expand here:
 
 ```json
 {
@@ -85,7 +85,7 @@ chmod +x "${PAI_DIR:-$HOME/.claude/PAI}/statusline-command.sh"
         "hooks": [
           {
             "type": "command",
-            "command": "curl -fsS --retry 3 --retry-delay 2 --retry-all-errors --connect-timeout 5 --max-time 15 -o \"${PAI_DIR:-$HOME/.claude/PAI}/statusline-command.sh\" \"https://codeberg.org/ljubitje/pai-statusline/raw/branch/main/statusline-command.sh?t=$(date +%s)\" && chmod +x \"${PAI_DIR:-$HOME/.claude/PAI}/statusline-command.sh\" || { echo \"[statusline] codeberg fetch FAILED after 3 retries — update flow may be broken; using cached statusline\" >&2; echo \"$(date -Iseconds) statusline fetch failed\" >> \"${PAI_DIR:-$HOME/.claude/PAI}/MEMORY/STATE/statusline-fetch-failures.log\"; exit 1; }"
+            "command": "curl -fsS --retry 3 --retry-delay 2 --retry-all-errors --connect-timeout 5 --max-time 15 -o \"${LIFEOS_DIR:-$HOME/.claude/LIFEOS}/statusline-command.sh\" \"https://codeberg.org/ljubitje/lifeos-statusline/raw/branch/main/statusline-command.sh?t=$(date +%s)\" && chmod +x \"${LIFEOS_DIR:-$HOME/.claude/LIFEOS}/statusline-command.sh\" || { echo \"[statusline] codeberg fetch FAILED after 3 retries — update flow may be broken; using cached statusline\" >&2; echo \"$(date -Iseconds) statusline fetch failed\" >> \"${LIFEOS_DIR:-$HOME/.claude/LIFEOS}/MEMORY/STATE/statusline-fetch-failures.log\"; exit 1; }"
           }
         ]
       }
@@ -96,15 +96,15 @@ chmod +x "${PAI_DIR:-$HOME/.claude/PAI}/statusline-command.sh"
 
 This downloads the latest version on every session start. The `?t=` cache-buster bypasses Codeberg's CDN cache (5-min TTL). Each fetch has a 5-second connect timeout and a 15-second total cap, and **retries up to 3 times** (2s apart, `--retry-all-errors`) to ride out transient Codeberg latency spikes.
 
-It does **not** fail silently. If all retries are exhausted, the hook prints a clear error to stderr, appends a timestamped line to `$PAI_DIR/MEMORY/STATE/statusline-fetch-failures.log`, and exits non-zero — so a genuinely broken update flow surfaces as a visible session-start hook error instead of rotting unnoticed. The previously-cached `statusline-command.sh` keeps rendering in the meantime, so a failed fetch never breaks your statusline.
+It does **not** fail silently. If all retries are exhausted, the hook prints a clear error to stderr, appends a timestamped line to `$LIFEOS_DIR/MEMORY/STATE/statusline-fetch-failures.log`, and exits non-zero — so a genuinely broken update flow surfaces as a visible session-start hook error instead of rotting unnoticed. The previously-cached `statusline-command.sh` keeps rendering in the meantime, so a failed fetch never breaks your statusline.
 
 ## Auto-update
 
 The statusline auto-updates only on **session start**, via the `SessionStart` hook above. There is no mid-session background polling — existing long-running sessions keep the version they started with. To pull a fresh version into a running session, restart Claude Code.
 
-To update manually in any PAI session, say:
+To update manually in any LifeOS session, say:
 
-> Update statusline from codeberg.org/ljubitje/pai-statusline
+> Update statusline from codeberg.org/ljubitje/lifeos-statusline
 
 ## Configuration
 
@@ -114,25 +114,24 @@ The statusline reads configuration from `settings.json`:
 |-----|---------|-------------|
 | `contextDisplay.compactionThreshold` | `100` | Scale context % so this threshold = 100%. Set to `62` if your compaction triggers at 62%. |
 | `principal.timezone` | `UTC` | Your timezone for reset time display (e.g., `America/New_York`) |
-| `pai.version` | `--` | PAI version string |
-| `counts.ratings` | `0` | Total ratings count (populated by PAI stop hooks) |
+| `counts.ratings` | `0` | Total ratings count (populated by LifeOS stop hooks) |
 | `statusline.showThinkingTime` | `true` | Show 💡 (all-time) and ⏳ (session) thinking-time segments. Set to `false` to disable both. |
-| `statusline.showQuote` | `false` | Render an extra row with the quote from `$PAI_DIR/.quote-cache`. |
+| `statusline.showQuote` | `false` | Render an extra row with the quote from `$LIFEOS_DIR/.quote-cache`. |
 
-### PAI v5.0 path layout
+### LOS 7.1.1 path layout
 
-The statusline follows the PAI v5.0 split between Claude-Code–managed files and PAI-shipped files:
+The statusline follows the LOS 7.1.1 split between Claude-Code–managed files and LifeOS-shipped files:
 
 | Variable | Default | Holds |
 |----------|---------|-------|
 | `CLAUDE_HOME` | `$HOME/.claude` | `settings.json`, `hooks/` — Claude-Code–managed only |
-| `PAI_DIR` | `$CLAUDE_HOME/PAI` | `MEMORY/`, `USER/`, `ALGORITHM/`, **`statusline-command.sh`**, and other PAI assets |
+| `LIFEOS_DIR` | `$CLAUDE_HOME/LIFEOS` | `MEMORY/`, `USER/`, `ALGORITHM/`, **`statusline-command.sh`**, and other LifeOS assets |
 
-The statusline script is a PAI-shipped, PAI-updated asset, so it lives under `PAI_DIR` alongside the rest. Both vars can be overridden via env. Pre-5.0 layouts (everything directly under `$HOME/.claude`) are not supported by this version — see git history for the legacy script.
+The statusline script is a LifeOS-shipped, LifeOS-updated asset, so it lives under `LIFEOS_DIR` alongside the rest. Both vars can be overridden via env. Pre-5.0 layouts (everything directly under `$HOME/.claude`) are not supported by this version — see git history for the legacy script.
 
 ### Telos state file
 
-If you populate `$PAI_DIR/USER/TELOS/PAI_STATE.json` with dimension percentages, the statusline renders a STATE row showing your distance from ideal across HEALTH / CREATIVE / FREEDOM / RELATIONSHIPS / MONEY. Missing dimensions render as `—`. Run `/interview` (Phase 2) in PAI to populate.
+If you populate `$LIFEOS_DIR/USER/TELOS/LIFEOS_STATE.json` with dimension percentages, the statusline renders a STATE row showing your distance from ideal across HEALTH / CREATIVE / FREEDOM / RELATIONSHIPS / MONEY. Missing dimensions render as `—`. Run `/interview` (Phase 2) in LifeOS to populate.
 
 ## How it works
 

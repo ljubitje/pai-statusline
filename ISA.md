@@ -1,5 +1,5 @@
 ---
-project: pai-statusline
+project: lifeos-statusline
 task: Total thinking-time metric (additive)
 effort: E2
 phase: complete

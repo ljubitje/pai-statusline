@@ -2,10 +2,10 @@
 
 ## Context
 
-The `pai-statusline` repository on Codeberg has been transferred from the `fishbowl` organization back to the `ljubitje` user account. All references in project files and git configuration still point to `fishbowl` and must be updated.
+The `lifeos-statusline` repository on Codeberg has been transferred from the `fishbowl` organization back to the `ljubitje` user account. All references in project files and git configuration still point to `fishbowl` and must be updated.
 
-**Current (incorrect):** `codeberg.org/fishbowl/pai-statusline`
-**Target (correct):** `codeberg.org/ljubitje/pai-statusline`
+**Current (incorrect):** `codeberg.org/fishbowl/lifeos-statusline`
+**Target (correct):** `codeberg.org/ljubitje/lifeos-statusline`
 
 ## Scope
 
@@ -13,9 +13,9 @@ The `pai-statusline` repository on Codeberg has been transferred from the `fishb
 
 | File | Lines | Reference |
 |------|-------|-----------|
-| `README.md` | 41 | Installation command: `codeberg.org/fishbowl/pai-statusline` |
+| `README.md` | 41 | Installation command: `codeberg.org/fishbowl/lifeos-statusline` |
 | `README.md` | 76 | Auto-update curl URL in JSON example |
-| `README.md` | 93 | Manual update command: `codeberg.org/fishbowl/pai-statusline` |
+| `README.md` | 93 | Manual update command: `codeberg.org/fishbowl/lifeos-statusline` |
 | `.claude/CLAUDE.md` | 38 | Auto-update hook curl URL in setup instructions |
 | `.git/config` | — | Git remote origin URL |
 
@@ -36,6 +36,6 @@ The `pai-statusline` repository on Codeberg has been transferred from the `fishb
 ## Verification
 
 - [ ] `grep -r fishbowl` returns zero matches in tracked files
-- [ ] `git remote -v` shows `ljubitje/pai-statusline`
+- [ ] `git remote -v` shows `ljubitje/lifeos-statusline`
 - [ ] README install/update commands point to correct URL
 - [ ] CLAUDE.md setup hook points to correct URL

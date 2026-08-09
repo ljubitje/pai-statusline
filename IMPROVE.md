@@ -8,7 +8,7 @@ Already applied (in `statusline-command.sh`):
 - Porcelain detection: 3 × `grep -q` → 1 × `awk` — saved ~15 ms.
 - `cat`/`basename` → bash builtin `read` / `${var##*/}` in startdir + session blocks — saved ~12 ms.
 - Thinking session cache by `(session_id, transcript_size)` (replaced TTL=5 s) — saved ~30 ms warm, plus self-migrating from old cache format.
-- Pipe before `PAI` in line 1 removed (cosmetic, separate change).
+- Pipe before `LifeOS` in line 1 removed (cosmetic, separate change).
 - Thought-balloon emoji replaced with light-bulb (💡) for thinking-time display.
 
 ---

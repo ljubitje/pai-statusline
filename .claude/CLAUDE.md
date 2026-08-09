@@ -1,20 +1,20 @@
-# PAI Status Line - Setup Agent
+# LifeOS Status Line - Setup Agent
 
 When a user asks you to "install the statusline", "set up the statusline", or similar, follow these steps:
 
 ## Installation Steps
 
-The statusline lives under `$PAI_DIR` (default `$HOME/.claude/PAI`). `$HOME/.claude` (CLAUDE_HOME) holds only Claude-Code–managed files (`settings.json`, `hooks/`). Treat `${PAI_DIR:-$HOME/.claude/PAI}` as the canonical install root and resolve to its absolute path before writing into `settings.json`.
+The statusline lives under `$LIFEOS_DIR` (default `$HOME/.claude/LifeOS`). `$HOME/.claude` (CLAUDE_HOME) holds only Claude-Code–managed files (`settings.json`, `hooks/`). Treat `${LIFEOS_DIR:-$HOME/.claude/LifeOS}` as the canonical install root and resolve to its absolute path before writing into `settings.json`.
 
 1. **Resolve the install path:**
    ```bash
-   PAI_DIR="${PAI_DIR:-$HOME/.claude/PAI}"
-   STATUSLINE_PATH="$PAI_DIR/statusline-command.sh"
+   LIFEOS_DIR="${LIFEOS_DIR:-$HOME/.claude/LifeOS}"
+   STATUSLINE_PATH="$LIFEOS_DIR/statusline-command.sh"
    ```
 
 2. **Copy the script:**
    ```bash
-   mkdir -p "$PAI_DIR"
+   mkdir -p "$LIFEOS_DIR"
    cp statusline-command.sh "$STATUSLINE_PATH"
    chmod +x "$STATUSLINE_PATH"
    ```
@@ -36,14 +36,14 @@ The statusline lives under `$PAI_DIR` (default `$HOME/.claude/PAI`). `$HOME/.cla
      ~/.claude/settings.json > /tmp/sl-patch.json && mv /tmp/sl-patch.json ~/.claude/settings.json
    ```
 
-6. **Add the auto-update hook** to SessionStart (the hook command runs in a shell, so `$PAI_DIR` expands at runtime):
+6. **Add the auto-update hook** to SessionStart (the hook command runs in a shell, so `$LIFEOS_DIR` expands at runtime):
    ```bash
    jq '
      .hooks.SessionStart = (.hooks.SessionStart // [])
      | if (.hooks.SessionStart | length) == 0
        then .hooks.SessionStart = [{"hooks": []}]
        else . end
-     | .hooks.SessionStart[0].hooks += [{"type": "command", "command": "curl -fsS --retry 3 --retry-delay 2 --retry-all-errors --connect-timeout 5 --max-time 15 -o \"${PAI_DIR:-$HOME/.claude/PAI}/statusline-command.sh\" \"https://codeberg.org/ljubitje/pai-statusline/raw/branch/main/statusline-command.sh?t=$(date +%s)\" && chmod +x \"${PAI_DIR:-$HOME/.claude/PAI}/statusline-command.sh\" || { echo \"[statusline] codeberg fetch FAILED after 3 retries — update flow may be broken; using cached statusline\" >&2; echo \"$(date -Iseconds) statusline fetch failed\" >> \"${PAI_DIR:-$HOME/.claude/PAI}/MEMORY/STATE/statusline-fetch-failures.log\"; exit 1; }"}]
+     | .hooks.SessionStart[0].hooks += [{"type": "command", "command": "curl -fsS --retry 3 --retry-delay 2 --retry-all-errors --connect-timeout 5 --max-time 15 -o \"${LIFEOS_DIR:-$HOME/.claude/LifeOS}/statusline-command.sh\" \"https://codeberg.org/ljubitje/lifeos-statusline/raw/branch/main/statusline-command.sh?t=$(date +%s)\" && chmod +x \"${LIFEOS_DIR:-$HOME/.claude/LifeOS}/statusline-command.sh\" || { echo \"[statusline] codeberg fetch FAILED after 3 retries — update flow may be broken; using cached statusline\" >&2; echo \"$(date -Iseconds) statusline fetch failed\" >> \"${LIFEOS_DIR:-$HOME/.claude/LifeOS}/MEMORY/STATE/statusline-fetch-failures.log\"; exit 1; }"}]
    ' ~/.claude/settings.json > /tmp/sl-patch.json && mv /tmp/sl-patch.json ~/.claude/settings.json
    ```
 
@@ -57,5 +57,5 @@ The statusline lives under `$PAI_DIR` (default `$HOME/.claude/PAI`). `$HOME/.cla
 ## Important
 
 - If `statusLine` already exists in settings.json pointing to a different path (e.g. `~/.claude/statusline-command.sh` from an older install), ask the user before overwriting and offer to clean up the orphan file.
-- If the auto-update hook already exists (check for "pai-statusline" in the curl URL), skip adding it again.
+- If the auto-update hook already exists (check for "lifeos-statusline" in the curl URL), skip adding it again.
 - Do not modify the statusline script itself during installation.
