@@ -1139,42 +1139,57 @@ if [ -f "$_mh_state" ]; then
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# CONTEXT-BUDGET — always-loaded context: STARTUP LOAD total + per-file cap-pressure
-# badges (file nearing its byte ceiling). Cached 60s (the file scan is the cost).
+# STARTUP CONTEXT — how much of the real context window the always-loaded files
+# occupy (STARTUP N%), then each file's share OF that load (shares sum to ~100%).
+# Window auto-detected from the model (1M-context variants vs the 200K standard).
+# Real always-loaded set = system prompt + CLAUDE.md + CLAUDE.md's @-imports.
+# Cached 60s (the file scan is the cost). No arbitrary per-file budgets.
 # ─────────────────────────────────────────────────────────────────────────────
 ctxbudget_line=""
-_cb_json="$LIFEOS_DIR/TOOLS/context-budgets.json"
 _cb_cache="$LIFEOS_DIR/MEMORY/STATE/ctxbudget-cache.sh"
-if [ -f "$_cb_json" ]; then
-    _cb_valid=false
-    if [ -f "$_cb_cache" ]; then
-        [ "$(( _NOW - $(get_mtime "$_cb_cache") ))" -lt 60 ] && _cb_valid=true
+case "$(printf '%s' "${model_name:-}" | tr '[:upper:]' '[:lower:]')" in
+    *1m*) _cb_window=1000000 ;;
+    *)    _cb_window=200000 ;;
+esac
+_cb_valid=false
+if [ -f "$_cb_cache" ]; then
+    [ "$(( _NOW - $(get_mtime "$_cb_cache") ))" -lt 60 ] && _cb_valid=true
+fi
+if [ "$_cb_valid" = true ]; then
+    source "$_cb_cache" 2>/dev/null
+else
+    _cb_files=("$LIFEOS_DIR/LIFEOS_SYSTEM_PROMPT.md" "$CLAUDE_HOME/CLAUDE.md")
+    if [ -f "$CLAUDE_HOME/CLAUDE.md" ]; then
+        while IFS= read -r _imp; do
+            [ -n "$_imp" ] && _cb_files+=("$CLAUDE_HOME/$_imp")
+        done < <(grep -oE '^@[^[:space:]]+' "$CLAUDE_HOME/CLAUDE.md" 2>/dev/null | sed 's/^@//')
     fi
-    if [ "$_cb_valid" = true ]; then
-        source "$_cb_cache" 2>/dev/null
-    else
-        _cb_total=0; _cb_badges=""
-        while IFS=$'\t' read -r _cbp _cbmax; do
-            [ -z "$_cbp" ] && continue
-            _cbf="$CLAUDE_HOME/$_cbp"
-            [ -f "$_cbf" ] || continue
-            _cbb=$(wc -c < "$_cbf" 2>/dev/null || echo 0)
-            _cb_total=$(( _cb_total + _cbb ))
-            if [ "${_cbmax:-0}" -gt 0 ] 2>/dev/null; then
-                _cbpct=$(( _cbb * 100 / _cbmax ))
-                if   [ "$_cbpct" -ge 90 ]; then _cb_badges="${_cb_badges} ${SCALE_RED}${_cbp##*/} ${_cbpct}%${RESET}"
-                elif [ "$_cbpct" -ge 75 ]; then _cb_badges="${_cb_badges} ${SCALE_ORANGE}${_cbp##*/} ${_cbpct}%${RESET}"
-                fi
-            fi
-        done < <(jq -r '.budgets[]? | "\(.path)\t\(.maxBytes // 0)"' "$_cb_json" 2>/dev/null)
-        _cb_tokk=$(awk -v t="$_cb_total" 'BEGIN{printf "%.1f", t/4/1000}')
-        printf '_cb_total=%s\n_cb_tokk=%q\n_cb_badges=%q\n' "$_cb_total" "$_cb_tokk" "$_cb_badges" > "$_cb_cache" 2>/dev/null
-    fi
-    if [ "${_cb_total:-0}" -gt 0 ]; then
-        _cb="📦${SLATE_400}STARTUP ${SLATE_300}${_cb_tokk}K${SLATE_400} tok${RESET}"
-        [ -n "$_cb_badges" ] && _cb="${_cb}${_cb_badges}"
-        printf -v ctxbudget_line '%b' "$_cb"
-    fi
+    _cb_total=0; _cb_rows=""
+    for _f in "${_cb_files[@]}"; do
+        [ -f "$_f" ] || continue
+        _b=$(wc -c < "$_f" 2>/dev/null || echo 0)
+        _cb_total=$(( _cb_total + _b ))
+        _lbl="${_f##*/}"; _lbl="${_lbl%.md}"
+        _cb_rows+="${_b}"$'\t'"${_lbl}"$'\n'
+    done
+    printf '_cb_total=%s\n_cb_rows=%q\n' "$_cb_total" "$_cb_rows" > "$_cb_cache" 2>/dev/null
+fi
+if [ "${_cb_total:-0}" -gt 0 ]; then
+    _cb_tok=$(( _cb_total / 4 ))
+    _cb_winpct=$(( _cb_tok * 100 / _cb_window ))
+    [ "$_cb_winpct" -lt 1 ] && _cb_wp="<1" || _cb_wp="$_cb_winpct"
+    _cb="📦${SLATE_400}STARTUP ${SLATE_300}${_cb_wp}%${RESET}"
+    _cb_shares=""
+    while IFS=$'\t' read -r _sh _lbl; do
+        [ -z "$_lbl" ] && continue
+        _cb_shares+=" ${SLATE_600}·${RESET} ${SLATE_300}${_lbl}${RESET} ${SLATE_400}${_sh}%${RESET}"
+    done < <(
+        while IFS=$'\t' read -r _b _lbl2; do
+            [ -z "$_b" ] && continue
+            printf '%d\t%s\n' "$(( _b * 100 / _cb_total ))" "$_lbl2"
+        done <<< "$_cb_rows" | sort -rn
+    )
+    printf -v ctxbudget_line '%b' "${_cb}${_cb_shares}"
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
