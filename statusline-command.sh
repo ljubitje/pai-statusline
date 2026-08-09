@@ -86,6 +86,8 @@ SHOW_THINKING_TIME="${SHOW_THINKING_TIME:-true}"
   IFS= read -r native_usage_7d
   IFS= read -r native_usage_7d_reset
   IFS= read -r transcript_path
+  IFS= read -r effort_level
+  IFS= read -r output_style
 } < <(echo "$input" | jq -r '
   (.workspace.current_dir // .cwd // "."),
   (.session_id // ""),
@@ -97,7 +99,9 @@ SHOW_THINKING_TIME="${SHOW_THINKING_TIME:-true}"
   (.rate_limits.five_hour.resets_at // ""),
   (.rate_limits.seven_day.used_percentage // .rate_limits.seven_day.utilization // 0 | tostring),
   (.rate_limits.seven_day.resets_at // ""),
-  (.transcript_path // "")
+  (.transcript_path // ""),
+  (.effort.level // ""),
+  (.output_style.name // "")
 ' 2>/dev/null)
 
 # Ensure defaults for critical numeric values
@@ -1029,6 +1033,68 @@ if [ "$SHOW_QUOTE" = "true" ] && [ -f "$QUOTE_CACHE" ]; then
     fi
 fi
 
+# ─────────────────────────────────────────────────────────────────────────────
+# MODEL STATE — effort ladder (⚡), current main-loop model, algorithm version
+# ─────────────────────────────────────────────────────────────────────────────
+_DIM='\033[2m'
+
+# ⚡ EFFORT: emoji ladder 🦠→🐙 (LOW→ULTRA). Current rung bracketed+bright, rest faint.
+# ONE variant — identical in every density tier. Color-emoji glyphs ignore fg-color
+# on most terminals, so the ‹ › bracket (not color) is the authoritative "you are
+# here" marker; faint (\033[2m) dims the rest only where the terminal supports it.
+effort_seg=""
+_effort_rungs=(🦠 🐌 🐝 🦉 🦑 🐙)
+_effort_lc=$(printf '%s' "${effort_level:-}" | tr '[:upper:]' '[:lower:]')
+_ostyle_lc=$(printf '%s' "${output_style:-}" | tr '[:upper:]' '[:lower:]')
+case "$_effort_lc" in
+    low)                    _effort_idx=0 ;;
+    medium|med)             _effort_idx=1 ;;
+    high)                   _effort_idx=2 ;;
+    xhigh|x-high|extrahigh) _effort_idx=3 ;;
+    max|maximum)            _effort_idx=4 ;;
+    ultra|ultracode)        _effort_idx=5 ;;
+    *)                      _effort_idx=-1 ;;
+esac
+case "$_ostyle_lc" in *ultra*|*ultracode*) _effort_idx=5 ;; esac
+if [ "$_effort_idx" -ge 0 ]; then
+    _el="⚡"
+    for _ei in "${!_effort_rungs[@]}"; do
+        if [ "$_ei" -eq "$_effort_idx" ]; then
+            _el+=" ${SLATE_300}‹${_effort_rungs[$_ei]}›${RESET}"
+        else
+            _el+=" ${_DIM}${_effort_rungs[$_ei]}${RESET}"
+        fi
+    done
+    printf -v effort_seg '%b' "$_el"
+fi
+
+# Current main-loop model: family glyph + CAPS name (distinct from the agents roster).
+model_seg=""
+if [ -n "$model_name" ] && [ "$model_name" != "unknown" ]; then
+    _model_lc=$(printf '%s' "$model_name" | tr '[:upper:]' '[:lower:]')
+    case "$_model_lc" in
+        *opus*)   _model_glyph="🎼" ;;
+        *fable*)  _model_glyph="🧚" ;;
+        *sonnet*) _model_glyph="📜" ;;
+        *haiku*)  _model_glyph="🌸" ;;
+        *)        _model_glyph="❓" ;;
+    esac
+    _model_caps=$(printf '%s' "$model_name" | tr '[:lower:]' '[:upper:]')
+    printf -v model_seg '%b' "${_model_glyph} ${SLATE_300}${_model_caps}${RESET}"
+fi
+
+# Algorithm version (LATEST). LOS version already lives in the identity cell.
+algo_seg=""
+[ -n "$ALGO_VERSION" ] && [ "$ALGO_VERSION" != "—" ] && printf -v algo_seg '%b' "${SLATE_400}⚙${ALGO_VERSION}${RESET}"
+
+# DOCTOR — delta-only capability regression. Renders ONLY when the precomputed
+# sidecar is non-empty (Doctor.ts writes it on regression); healthy = silent.
+doctor_line=""
+_doctor_sidecar="$LIFEOS_DIR/MEMORY/STATE/capabilities-statusline.txt"
+if [ -s "$_doctor_sidecar" ]; then
+    printf -v doctor_line '%b' "${SCALE_ORANGE}$(cat "$_doctor_sidecar" 2>/dev/null)${RESET}"
+fi
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # RENDER (pick largest density that fits terminal width)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1077,10 +1143,28 @@ elif [ -n "$state_line" ]; then
     line3="${state_line}"
 fi
 
-# Extra lines (line3 = LEARN+STATE, then quote) — emitted after chosen-tier line1+line2.
-# Each is non-empty only when its source data exists; missing rows simply skip.
+# Model-state row: ⚡effort │ model │ ⚙algo — each segment present-only, joined by sep.
+modelstate_line=""
+_ms_parts=()
+[ -n "$effort_seg" ] && _ms_parts+=("$effort_seg")
+[ -n "$model_seg" ]  && _ms_parts+=("$model_seg")
+[ -n "$algo_seg" ]   && _ms_parts+=("$algo_seg")
+if [ "${#_ms_parts[@]}" -gt 0 ]; then
+    modelstate_line="${_ms_parts[0]}"
+    _i=1
+    while [ "$_i" -lt "${#_ms_parts[@]}" ]; do
+        modelstate_line="${modelstate_line}${sep}${_ms_parts[$_i]}"
+        _i=$((_i + 1))
+    done
+fi
+
+# Extra lines — emitted after the chosen-tier line1+line2. Each is non-empty only
+# when its source data exists; missing rows simply skip. DOCTOR leads (warning
+# prominence); then LEARN+STATE, model-state, then quote.
 emit_extras() {
+    [ -n "$doctor_line" ] && printf '%s\n' "$doctor_line"
     [ -n "$line3" ] && printf '%s\n' "$line3"
+    [ -n "$modelstate_line" ] && printf '%s\n' "$modelstate_line"
     [ -n "$quote_line" ] && printf '%s\n' "$quote_line"
 }
 
