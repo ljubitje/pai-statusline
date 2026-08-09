@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════════════════════
-# PAI Status Line
+# LifeOS (LOS) Status Line
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# Dense 2-line statusline for PAI + Claude Code.
+# Dense multi-line statusline for LifeOS (LOS) + Claude Code.
 # Four sections: Identity, Session, Usage, Learning.
 # Context shown as moon phase (🌑→🌕) scaled to compaction threshold if configured.
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -14,25 +14,24 @@ set -o pipefail
 # CONFIGURATION
 # ─────────────────────────────────────────────────────────────────────────────
 
-# PAI 5.0 path layout:
+# LOS 7.1.1 path layout:
 #   CLAUDE_HOME = Claude-Code-owned directory ($HOME/.claude)
 #                 holds settings.json, hooks, statusline-command.sh itself
-#   PAI_DIR     = PAI-owned subtree ($CLAUDE_HOME/PAI by default)
-#                 holds MEMORY/, USER/, ALGORITHM/, etc.
-# Pre-5.0 (legacy) had everything directly under $HOME/.claude — that breaks
-# now because MEMORY moved to $HOME/.claude/PAI/MEMORY.
+#   LIFEOS_DIR  = LifeOS-owned subtree ($CLAUDE_HOME/LIFEOS by default)
+#                 holds MEMORY/, USER/, ALGORITHM/, VERSION, etc.
+# Legacy PAI_DIR env is still honored as a fallback override.
 CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
-PAI_DIR="${PAI_DIR:-$CLAUDE_HOME/PAI}"
+LIFEOS_DIR="${LIFEOS_DIR:-${PAI_DIR:-$CLAUDE_HOME/LIFEOS}}"
 SETTINGS_FILE="$CLAUDE_HOME/settings.json"
-RATINGS_FILE="$PAI_DIR/MEMORY/LEARNING/SIGNALS/ratings.jsonl"
-MODEL_CACHE="$PAI_DIR/MEMORY/STATE/model-cache.txt"
-USAGE_CACHE="$PAI_DIR/MEMORY/STATE/usage-cache.json"
-STATUS_CACHE="$PAI_DIR/MEMORY/STATE/status-claude.json"
+RATINGS_FILE="$LIFEOS_DIR/MEMORY/LEARNING/SIGNALS/ratings.jsonl"
+MODEL_CACHE="$LIFEOS_DIR/MEMORY/STATE/model-cache.txt"
+USAGE_CACHE="$LIFEOS_DIR/MEMORY/STATE/usage-cache.json"
+STATUS_CACHE="$LIFEOS_DIR/MEMORY/STATE/status-claude.json"
 USAGE_CACHE_TTL=60       # 60 seconds (API recommends ≤1 poll/minute)
 STATUS_CACHE_TTL=30
 
 # Source .env for API keys
-[ -f "${PAI_CONFIG_DIR:-$HOME/.config/PAI}/.env" ] && source "${PAI_CONFIG_DIR:-$HOME/.config/PAI}/.env"
+[ -f "${LIFEOS_CONFIG_DIR:-${PAI_CONFIG_DIR:-$HOME/.config/LIFEOS}}/.env" ] && source "${LIFEOS_CONFIG_DIR:-${PAI_CONFIG_DIR:-$HOME/.config/LIFEOS}}/.env"
 
 # Cross-platform file mtime (seconds since epoch)
 # macOS uses stat -f %m, Linux uses stat -c %Y
@@ -49,21 +48,24 @@ input=$(cat)
 # Extract all settings + counts in a single jq call (safe: no eval)
 {
   IFS= read -r USER_TZ
-  IFS= read -r PAI_VERSION
   IFS= read -r COMPACTION_THRESHOLD
   IFS= read -r ratings_count
   IFS= read -r SHOW_QUOTE
   IFS= read -r SHOW_THINKING_TIME
 } < <(jq -r '
   (.principal.timezone // "UTC"),
-  (.pai.version // "—"),
   (.contextDisplay.compactionThreshold // 100 | tostring),
   (.counts.ratings // 0 | tostring),
   (.statusline.showQuote // false | tostring),
   (.statusline.showThinkingTime // true | tostring)
 ' "$SETTINGS_FILE" 2>/dev/null)
 USER_TZ="${USER_TZ:-UTC}"
-PAI_VERSION="${PAI_VERSION:-—}"
+# LOS version from the canonical VERSION file (was the now-stale .pai.version key).
+IFS= read -r LIFEOS_VERSION < "$LIFEOS_DIR/VERSION" 2>/dev/null || LIFEOS_VERSION=""
+LIFEOS_VERSION="${LIFEOS_VERSION//[[:space:]]/}"; LIFEOS_VERSION="${LIFEOS_VERSION:-—}"
+# Algorithm version — LATEST is the single source of truth (v6.2.0+).
+IFS= read -r ALGO_VERSION < "$LIFEOS_DIR/ALGORITHM/LATEST" 2>/dev/null || ALGO_VERSION=""
+ALGO_VERSION="${ALGO_VERSION//[[:space:]]/}"; ALGO_VERSION="${ALGO_VERSION:-—}"
 COMPACTION_THRESHOLD="${COMPACTION_THRESHOLD:-100}"
 SHOW_QUOTE="${SHOW_QUOTE:-false}"
 SHOW_TIME="${SHOW_TIME:-false}"
@@ -182,7 +184,7 @@ if [ "$has_native_rate_limits" = "true" ]; then
     usage_7d="$native_usage_7d"
     usage_7d_reset="$native_usage_7d_reset"
 else
-    USAGE_CACHE_SH="$PAI_DIR/MEMORY/STATE/usage-cache.sh"
+    USAGE_CACHE_SH="$LIFEOS_DIR/MEMORY/STATE/usage-cache.sh"
     if [ -f "$USAGE_CACHE_SH" ]; then
         source "$USAGE_CACHE_SH"
     elif [ -f "$USAGE_CACHE" ]; then
@@ -206,7 +208,7 @@ usage_7d="${usage_7d:-0}"
 usage_7d_reset="${usage_7d_reset:-}"
 
 # Status cache — direct source from pre-built .sh (updated by fire-and-forget block)
-STATUS_CACHE_SH="$PAI_DIR/MEMORY/STATE/status-cache.sh"
+STATUS_CACHE_SH="$LIFEOS_DIR/MEMORY/STATE/status-cache.sh"
 if [ -f "$STATUS_CACHE_SH" ]; then
     source "$STATUS_CACHE_SH"
 else
@@ -220,7 +222,7 @@ wait
 [ -f "$_parallel_tmp/git.sh" ] && source "$_parallel_tmp/git.sh"
 rm -rf "$_parallel_tmp" 2>/dev/null
 
-LEARNING_CACHE="$PAI_DIR/MEMORY/STATE/learning-cache.sh"
+LEARNING_CACHE="$LIFEOS_DIR/MEMORY/STATE/learning-cache.sh"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -272,8 +274,8 @@ VERSION_DIM="$SLATE_600"
 # ─────────────────────────────────────────────────────────────────────────────
 # VERSION LATEST CHECK (cached by fire-and-forget block)
 # ─────────────────────────────────────────────────────────────────────────────
-VERSION_CACHE_SH="$PAI_DIR/MEMORY/STATE/version-cache.sh"
-cc_latest=""; pai_latest=""
+VERSION_CACHE_SH="$LIFEOS_DIR/MEMORY/STATE/version-cache.sh"
+cc_latest=""
 [ -f "$VERSION_CACHE_SH" ] && source "$VERSION_CACHE_SH"
 
 # Format version: hide if latest, dim outdated segments if not
@@ -301,7 +303,7 @@ format_version_display() {
     printf '%b' "$RESET"
 }
 
-pai_ver_display=$(format_version_display "$PAI_VERSION" "$pai_latest" "$SLATE_500")
+lifeos_ver_display=$(format_version_display "$LIFEOS_VERSION" "" "$SLATE_500")
 cc_ver_display=$(format_version_display "$cc_version" "$cc_latest" "$SLATE_500")
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -656,7 +658,7 @@ if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
     # bumps the size and invalidates the cache. Per-session to avoid cross-session
     # collisions; skipped entirely when session_id is empty (would race per-render).
     FILES_CACHE_SH=""
-    [ -n "$session_id" ] && FILES_CACHE_SH="$PAI_DIR/MEMORY/STATE/files-cache-${session_id}.sh"
+    [ -n "$session_id" ] && FILES_CACHE_SH="$LIFEOS_DIR/MEMORY/STATE/files-cache-${session_id}.sh"
     _tx_size=$(stat -c %s "$transcript_path" 2>/dev/null || stat -f %z "$transcript_path" 2>/dev/null)
     _tx_size="${_tx_size:-0}"
 
@@ -745,9 +747,9 @@ fi
 # All-time total    → sum across that directory, cached 60s.
 #
 # Display is on by default; disable via .statusline.showThinkingTime=false in settings.json.
-THINKING_DIR="$PAI_DIR/MEMORY/STATE/thinking-time"
-THINKING_CACHE="$PAI_DIR/MEMORY/STATE/thinking-cache-${session_id:-default}.txt"
-THINKING_ALLTIME_CACHE="$PAI_DIR/MEMORY/STATE/thinking-alltime-cache.txt"
+THINKING_DIR="$LIFEOS_DIR/MEMORY/STATE/thinking-time"
+THINKING_CACHE="$LIFEOS_DIR/MEMORY/STATE/thinking-cache-${session_id:-default}.txt"
+THINKING_ALLTIME_CACHE="$LIFEOS_DIR/MEMORY/STATE/thinking-alltime-cache.txt"
 THINKING_ALLTIME_TTL=60
 
 thinking_full=""; thinking_dense=""
@@ -888,10 +890,10 @@ case "${claude_status_indicator:-unknown}" in
 esac
 _status_display=" ${_status_color}${_status_icon}${RESET} ${SLATE_400}${claude_status_desc:-fetch failed}${RESET}"
 
-# IDENTITY (PAI version, CC version, Claude Code status)
+# IDENTITY (LOS version, CC version, Claude Code status)
 # Version displays: empty if latest, space+dimmed if outdated
-printf -v id_full '%b' "${PAI_P}P${PAI_A}A${PAI_I}I${RESET}${pai_ver_display} ${SLATE_600}│${RESET} ${CC_C1}C${CC_C2}C${RESET}${cc_ver_display}${_status_display}"
-printf -v id_dense '%b' "${PAI_P}P${PAI_A}A${PAI_I}I${RESET} ${SLATE_600}│${RESET} ${CC_C1}C${CC_C2}C${RESET}${cc_ver_display}${_status_display}"
+printf -v id_full '%b' "${PAI_P}L${PAI_A}O${PAI_I}S${RESET}${lifeos_ver_display} ${SLATE_600}│${RESET} ${CC_C1}C${CC_C2}C${RESET}${cc_ver_display}${_status_display}"
+printf -v id_dense '%b' "${PAI_P}L${PAI_A}O${PAI_I}S${RESET} ${SLATE_600}│${RESET} ${CC_C1}C${CC_C2}C${RESET}${cc_ver_display}${_status_display}"
 printf -v id_ultra '%b' "${CC_C1}C${CC_C2}C${RESET}${_status_display}"
 
 # SESSION TIME (clock-only — left of line1, opt-in via SHOW_TIME=true)
@@ -959,12 +961,12 @@ else
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# STATE METER (B1 v5.0-style row) — reads PAI_STATE.json, renders dimensions
+# STATE METER — reads LIFEOS_STATE.json, renders life dimensions
 # ─────────────────────────────────────────────────────────────────────────────
 # Format: ❤️ 68% 🪄 31% 🕊️ 78% 🫂 84% 🪙 42%
 # Missing dimensions render as "—" (per ISC-24 — never null or 0).
 state_line=""
-_PAI_STATE_JSON="$PAI_DIR/USER/TELOS/PAI_STATE.json"
+_PAI_STATE_JSON="$LIFEOS_DIR/USER/TELOS/LIFEOS_STATE.json"
 if [ -f "$_PAI_STATE_JSON" ]; then
     _dim_color() {
         case "$1" in
@@ -1017,7 +1019,7 @@ fi
 # QUOTE LINE (optional 4th line) — reuses .quote-cache from v5.0 upstream.
 # Off by default; opt in via `.statusline.showQuote: true` in settings.json.
 # ─────────────────────────────────────────────────────────────────────────────
-QUOTE_CACHE="$PAI_DIR/.quote-cache"
+QUOTE_CACHE="$LIFEOS_DIR/.quote-cache"
 QUOTE_AUTHOR='\033[38;2;180;140;60m'
 quote_line=""
 if [ "$SHOW_QUOTE" = "true" ] && [ -f "$QUOTE_CACHE" ]; then
@@ -1142,7 +1144,7 @@ if ! [ -f "$_bg_lock" ] || [ $(($(date +%s) - $(get_mtime "$_bg_lock"))) -gt 10 
                         "usage_opus=" + (if .seven_day_opus then (.seven_day_opus.utilization // 0 | tostring) else "null" end) + "\n" +
                         "usage_sonnet=" + (if .seven_day_sonnet then (.seven_day_sonnet.utilization // 0 | tostring) else "null" end) + "\n" +
                         "usage_ws_cost_cents=" + (.workspace_cost.month_used_cents // 0 | tostring)
-                    ' > "$PAI_DIR/MEMORY/STATE/usage-cache.sh" 2>/dev/null
+                    ' > "$LIFEOS_DIR/MEMORY/STATE/usage-cache.sh" 2>/dev/null
                     # Countdown is always computed live from usage_5h_reset (changes every render)
                 fi
             fi
@@ -1165,24 +1167,18 @@ if ! [ -f "$_bg_lock" ] || [ $(($(date +%s) - $(get_mtime "$_bg_lock"))) -gt 10 
                     maintenance) _s_desc="maintenance" ;;
                     *)           _s_desc="unknown" ;;
                 esac
-                printf "claude_status_indicator='%s'\nclaude_status_desc='%s'\n" "$_s_ind" "$_s_desc" > "$PAI_DIR/MEMORY/STATE/status-cache.sh"
+                printf "claude_status_indicator='%s'\nclaude_status_desc='%s'\n" "$_s_ind" "$_s_desc" > "$LIFEOS_DIR/MEMORY/STATE/status-cache.sh"
             fi
         fi
 
-        # Latest version cache refresh (CC from npm, PAI from GitHub)
+        # Latest version cache refresh (CC from npm only). LOS is a personal fork —
+        # there's no meaningful upstream "latest" to diff against, so no repo fetch.
         _ver_age=999999
         [ -f "$VERSION_CACHE_SH" ] && _ver_age=$(($(date +%s) - $(get_mtime "$VERSION_CACHE_SH")))
         if [ "$_ver_age" -gt 3600 ]; then
             _cc_lat=$(curl -s --max-time 3 "https://registry.npmjs.org/@anthropic-ai/claude-code/latest" 2>/dev/null | jq -r '.version // empty' 2>/dev/null)
-            # PAI publishes releases as directories under /Releases/ on main, not as
-            # tagged GitHub Releases. Pick the highest semver dir name.
-            _pai_lat=$(curl -sL --max-time 3 "https://api.github.com/repos/danielmiessler/Personal_AI_Infrastructure/contents/Releases?ref=main" 2>/dev/null \
-                | jq -r '[.[] | select(.type=="dir") | .name | select(test("^v?[0-9]+\\.[0-9]+\\.[0-9]+$"))]
-                         | map(ltrimstr("v"))
-                         | sort_by(split(".") | map(tonumber))
-                         | last // empty' 2>/dev/null)
-            if [ -n "$_cc_lat" ] || [ -n "$_pai_lat" ]; then
-                printf "cc_latest='%s'\npai_latest='%s'\n" "${_cc_lat:-}" "${_pai_lat:-}" > "$VERSION_CACHE_SH" 2>/dev/null
+            if [ -n "$_cc_lat" ]; then
+                printf "cc_latest='%s'\n" "${_cc_lat:-}" > "$VERSION_CACHE_SH" 2>/dev/null
             fi
         fi
 
