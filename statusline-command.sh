@@ -1095,6 +1095,115 @@ if [ -s "$_doctor_sidecar" ]; then
     printf -v doctor_line '%b' "${SCALE_ORANGE}$(cat "$_doctor_sidecar" 2>/dev/null)${RESET}"
 fi
 
+# ─────────────────────────────────────────────────────────────────────────────
+# AGENTS ROSTER — model rungs; a rung is bright while a dispatched agent resolving
+# to it is live (<300s in agent-starts.json), else faint; plus ▸N in-flight count.
+# ─────────────────────────────────────────────────────────────────────────────
+agents_line=""
+_ag_file="$LIFEOS_DIR/MEMORY/OBSERVABILITY/agent-starts.json"
+if [ -f "$_ag_file" ]; then
+    _ag_now_ms=$(( _NOW * 1000 ))
+    _ag_data=$(jq -r --argjson now "$_ag_now_ms" '
+        [to_entries[] | .value | select((.epoch != null) and (($now - .epoch) < 300000) and (($now - .epoch) >= 0))] as $live |
+        ($live | length | tostring) + "\t" + ($live | map(.model // "" | ascii_downcase) | unique | join(","))
+    ' "$_ag_file" 2>/dev/null)
+    if [ -n "$_ag_data" ]; then
+        _ag_count="${_ag_data%%$'\t'*}"; _ag_count="${_ag_count:-0}"
+        _ag_models="${_ag_data#*$'\t'}"
+        _ag_rungs=(HAIKU SONNET OPUS FABLE)
+        _ag="${SLATE_500}🛰${RESET}"
+        for _r in "${_ag_rungs[@]}"; do
+            _rl=$(printf '%s' "$_r" | tr '[:upper:]' '[:lower:]')
+            case ",$_ag_models," in
+                *",$_rl,"*) _ag="${_ag} ${SLATE_300}${_r}${RESET}" ;;
+                *)          _ag="${_ag} ${_DIM}${_r}${RESET}" ;;
+            esac
+        done
+        [ "$_ag_count" -gt 0 ] 2>/dev/null && _ag="${_ag} ${SLATE_600}▸${RESET}${TEXT_LIME}${_ag_count}${RESET}"
+        printf -v agents_line '%b' "$_ag"
+    fi
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MEMORY-HEALTH — autonomic memory-review status. OWN line (deliberately NOT merged
+# with the ratings 🧠 line — principal will decide the merge). Guards every source.
+# ─────────────────────────────────────────────────────────────────────────────
+memhealth_line=""
+_mh_state="$LIFEOS_DIR/MEMORY/OBSERVABILITY/review-state.json"
+if [ -f "$_mh_state" ]; then
+    _mh_turns=$(jq -r '.turn_count_since_last_review // empty' "$_mh_state" 2>/dev/null)
+    _mh_last=$(jq -r '.last_review_at // empty' "$_mh_state" 2>/dev/null)
+    _mh_pending=$(jq -r '.pending_review // false' "$_mh_state" 2>/dev/null)
+    _mh_thresh=8
+    [ -f "$LIFEOS_DIR/USER/CONFIG/memory-review.json" ] && \
+        _mh_thresh=$(jq -r '.turn_threshold // 8' "$LIFEOS_DIR/USER/CONFIG/memory-review.json" 2>/dev/null)
+    if [ "$_mh_pending" = "true" ]; then _mh_status="DUE"; _mh_scol="$SCALE_YELLOW"; else _mh_status="OK"; _mh_scol="$TEXT_GREEN"; fi
+    _mh_age=""
+    if [ -n "$_mh_last" ]; then
+        _mh_lep=$(date -d "$_mh_last" +%s 2>/dev/null)
+        if [ -n "$_mh_lep" ]; then
+            _mh_d=$(( _NOW - _mh_lep ))
+            if   [ "$_mh_d" -lt 3600 ];  then _mh_age="$(( _mh_d / 60 ))m"
+            elif [ "$_mh_d" -lt 86400 ]; then _mh_age="$(( _mh_d / 3600 ))h"
+            else _mh_age="$(( _mh_d / 86400 ))d"; fi
+        fi
+    fi
+    _mh_next=""
+    if [[ "$_mh_turns" =~ ^[0-9]+$ ]]; then
+        _mh_rem=$(( _mh_thresh - _mh_turns )); [ "$_mh_rem" -lt 0 ] && _mh_rem=0
+        _mh_next="$_mh_rem"
+    fi
+    _mh_bytes=0
+    for _f in "$LIFEOS_DIR/USER/PRINCIPAL/PRINCIPAL_MEMORY.md" "$LIFEOS_DIR/USER/DIGITAL_ASSISTANT/DA_MEMORY.md"; do
+        [ -f "$_f" ] && _mh_bytes=$(( _mh_bytes + $(wc -c < "$_f" 2>/dev/null || echo 0) ))
+    done
+    _mh_fill=$(( _mh_bytes * 100 / 24576 ))
+    _mh="🧠 ${_mh_scol}${_mh_status}${RESET}"
+    [ -n "$_mh_age" ]  && _mh="${_mh} ${SLATE_600}·${RESET} ${SLATE_400}REVIEWED ${_mh_age} AGO${RESET}"
+    [ -n "$_mh_next" ] && _mh="${_mh} ${SLATE_600}·${RESET} ${SLATE_400}NEXT ${_mh_next}T${RESET}"
+    _mh="${_mh} ${SLATE_600}·${RESET} ${SLATE_400}${_mh_fill}% FULL${RESET}"
+    printf -v memhealth_line '%b' "$_mh"
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CONTEXT-BUDGET — always-loaded context: STARTUP LOAD total + per-file cap-pressure
+# badges (file nearing its byte ceiling). Cached 60s (the file scan is the cost).
+# ─────────────────────────────────────────────────────────────────────────────
+ctxbudget_line=""
+_cb_json="$LIFEOS_DIR/TOOLS/context-budgets.json"
+_cb_cache="$LIFEOS_DIR/MEMORY/STATE/ctxbudget-cache.sh"
+if [ -f "$_cb_json" ]; then
+    _cb_valid=false
+    if [ -f "$_cb_cache" ]; then
+        [ "$(( _NOW - $(get_mtime "$_cb_cache") ))" -lt 60 ] && _cb_valid=true
+    fi
+    if [ "$_cb_valid" = true ]; then
+        source "$_cb_cache" 2>/dev/null
+    else
+        _cb_total=0; _cb_badges=""
+        while IFS=$'\t' read -r _cbp _cbmax; do
+            [ -z "$_cbp" ] && continue
+            _cbf="$CLAUDE_HOME/$_cbp"
+            [ -f "$_cbf" ] || continue
+            _cbb=$(wc -c < "$_cbf" 2>/dev/null || echo 0)
+            _cb_total=$(( _cb_total + _cbb ))
+            if [ "${_cbmax:-0}" -gt 0 ] 2>/dev/null; then
+                _cbpct=$(( _cbb * 100 / _cbmax ))
+                if   [ "$_cbpct" -ge 90 ]; then _cb_badges="${_cb_badges} ${SCALE_RED}${_cbp##*/} ${_cbpct}%${RESET}"
+                elif [ "$_cbpct" -ge 75 ]; then _cb_badges="${_cb_badges} ${SCALE_ORANGE}${_cbp##*/} ${_cbpct}%${RESET}"
+                fi
+            fi
+        done < <(jq -r '.budgets[]? | "\(.path)\t\(.maxBytes // 0)"' "$_cb_json" 2>/dev/null)
+        _cb_tokk=$(awk -v t="$_cb_total" 'BEGIN{printf "%.1f", t/4/1000}')
+        printf '_cb_total=%s\n_cb_tokk=%q\n_cb_badges=%q\n' "$_cb_total" "$_cb_tokk" "$_cb_badges" > "$_cb_cache" 2>/dev/null
+    fi
+    if [ "${_cb_total:-0}" -gt 0 ]; then
+        _cb="📦${SLATE_400}STARTUP ${SLATE_300}${_cb_tokk}K${SLATE_400} tok${RESET}"
+        [ -n "$_cb_badges" ] && _cb="${_cb}${_cb_badges}"
+        printf -v ctxbudget_line '%b' "$_cb"
+    fi
+fi
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # RENDER (pick largest density that fits terminal width)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1165,6 +1274,9 @@ emit_extras() {
     [ -n "$doctor_line" ] && printf '%s\n' "$doctor_line"
     [ -n "$line3" ] && printf '%s\n' "$line3"
     [ -n "$modelstate_line" ] && printf '%s\n' "$modelstate_line"
+    [ -n "$agents_line" ] && printf '%s\n' "$agents_line"
+    [ -n "$memhealth_line" ] && printf '%s\n' "$memhealth_line"
+    [ -n "$ctxbudget_line" ] && printf '%s\n' "$ctxbudget_line"
     [ -n "$quote_line" ] && printf '%s\n' "$quote_line"
 }
 
