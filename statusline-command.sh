@@ -61,11 +61,11 @@ input=$(cat)
 ' "$SETTINGS_FILE" 2>/dev/null)
 USER_TZ="${USER_TZ:-UTC}"
 # LOS version from the canonical VERSION file (was the now-stale .pai.version key).
-IFS= read -r LIFEOS_VERSION < "$LIFEOS_DIR/VERSION" 2>/dev/null || LIFEOS_VERSION=""
+# Guard with -f: `read < missing 2>/dev/null` still leaks to stderr (the input
+# redirect fails before 2>/dev/null takes effect) — matters on fresh installs.
+LIFEOS_VERSION=""
+[ -f "$LIFEOS_DIR/VERSION" ] && IFS= read -r LIFEOS_VERSION < "$LIFEOS_DIR/VERSION"
 LIFEOS_VERSION="${LIFEOS_VERSION//[[:space:]]/}"; LIFEOS_VERSION="${LIFEOS_VERSION:-—}"
-# Algorithm version — LATEST is the single source of truth (v6.2.0+).
-IFS= read -r ALGO_VERSION < "$LIFEOS_DIR/ALGORITHM/LATEST" 2>/dev/null || ALGO_VERSION=""
-ALGO_VERSION="${ALGO_VERSION//[[:space:]]/}"; ALGO_VERSION="${ALGO_VERSION:-—}"
 COMPACTION_THRESHOLD="${COMPACTION_THRESHOLD:-100}"
 SHOW_QUOTE="${SHOW_QUOTE:-false}"
 SHOW_TIME="${SHOW_TIME:-false}"
@@ -78,6 +78,7 @@ SHOW_THINKING_TIME="${SHOW_THINKING_TIME:-true}"
   IFS= read -r current_dir
   IFS= read -r session_id
   IFS= read -r model_name
+  IFS= read -r model_id
   IFS= read -r cc_version_json
   IFS= read -r context_pct
   IFS= read -r has_native_rate_limits
@@ -92,6 +93,7 @@ SHOW_THINKING_TIME="${SHOW_THINKING_TIME:-true}"
   (.workspace.current_dir // .cwd // "."),
   (.session_id // ""),
   (.model.display_name // "unknown"),
+  (.model.id // ""),
   (.version // ""),
   (.context_window.used_percentage // 0 | tostring),
   ((.rate_limits != null) | tostring),
@@ -1034,14 +1036,12 @@ if [ "$SHOW_QUOTE" = "true" ] && [ -f "$QUOTE_CACHE" ]; then
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# MODEL STATE — effort ladder (⚡), current main-loop model, algorithm version
+# MODEL STATE — effort ladder (⚡) + current main-loop model (both emoji ladders)
 # ─────────────────────────────────────────────────────────────────────────────
-_DIM='\033[2m'
 
-# ⚡ EFFORT: emoji ladder 🦠→🐙 (LOW→ULTRA). Current rung bracketed+bright, rest faint.
-# ONE variant — identical in every density tier. Color-emoji glyphs ignore fg-color
-# on most terminals, so the ‹ › bracket (not color) is the authoritative "you are
-# here" marker; faint (\033[2m) dims the rest only where the terminal supports it.
+# ⚡ EFFORT: emoji ladder 🦠→🐙 (LOW→ULTRA). Current rung bracketed ‹ ›; ALL rungs at
+# full brightness (color-emoji ignore fg-color anyway, so the ‹ › bracket — not
+# dimming — is the sole "you are here" marker). ONE variant, identical in every tier.
 effort_seg=""
 _effort_rungs=(🦠 🐌 🐝 🦉 🦑 🐙)
 _effort_lc=$(printf '%s' "${effort_level:-}" | tr '[:upper:]' '[:lower:]')
@@ -1087,7 +1087,7 @@ for _mi in "${!_model_glyphs[@]}"; do
         _ml+="${SLATE_300}${_model_glyphs[$_mi]}${RESET}"
     fi
 done
-printf -v model_seg '%b' "$_ml"
+[ "$_model_cur" -ge 0 ] && printf -v model_seg '%b' "$_ml"
 
 # DOCTOR — delta-only capability regression. Renders ONLY when the precomputed
 # sidecar is non-empty (Doctor.ts writes it on regression); healthy = silent.
@@ -1130,7 +1130,7 @@ if [ -f "$_mh_state" ]; then
     for _f in "$LIFEOS_DIR/USER/PRINCIPAL/PRINCIPAL_MEMORY.md" "$LIFEOS_DIR/USER/DIGITAL_ASSISTANT/DA_MEMORY.md"; do
         [ -f "$_f" ] && _mh_bytes=$(( _mh_bytes + $(wc -c < "$_f" 2>/dev/null || echo 0) ))
     done
-    _mh_fill=$(( _mh_bytes * 100 / 24576 ))
+    _mh_fill=$(( _mh_bytes * 100 / 24576 )); [ "$_mh_fill" -gt 100 ] && _mh_fill=100
     _mh="🧠 ${_mh_scol}${_mh_status}${RESET}"
     [ -n "$_mh_age" ]  && _mh="${_mh} ${SLATE_600}·${RESET} ${SLATE_400}REVIEWED ${_mh_age} AGO${RESET}"
     [ -n "$_mh_next" ] && _mh="${_mh} ${SLATE_600}·${RESET} ${SLATE_400}NEXT ${_mh_next}T${RESET}"
@@ -1147,7 +1147,9 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 ctxbudget_line=""
 _cb_cache="$LIFEOS_DIR/MEMORY/STATE/ctxbudget-cache.sh"
-case "$(printf '%s' "${model_name:-}" | tr '[:upper:]' '[:lower:]')" in
+# Window from the model ID (reliable: e.g. claude-opus-4-8[1m]); the display_name is
+# a short label ("Opus 4.8") with no context annotation. Fall back to name, else 200K.
+case "$(printf '%s %s' "${model_id:-}" "${model_name:-}" | tr '[:upper:]' '[:lower:]')" in
     *1m*) _cb_window=1000000 ;;
     *)    _cb_window=200000 ;;
 esac
