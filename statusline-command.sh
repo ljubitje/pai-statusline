@@ -1062,30 +1062,32 @@ if [ "$_effort_idx" -ge 0 ]; then
         if [ "$_ei" -eq "$_effort_idx" ]; then
             _el+=" ${SLATE_300}‹${_effort_rungs[$_ei]}›${RESET}"
         else
-            _el+=" ${_DIM}${_effort_rungs[$_ei]}${RESET}"
+            _el+=" ${SLATE_300}${_effort_rungs[$_ei]}${RESET}"
         fi
     done
     printf -v effort_seg '%b' "$_el"
 fi
 
-# Current main-loop model: family glyph + CAPS name (distinct from the agents roster).
+# Current main-loop model as an emoji ladder (same style as the effort scale):
+# all model glyphs at full brightness, the active one bracketed ‹ ›.
 model_seg=""
-if [ -n "$model_name" ] && [ "$model_name" != "unknown" ]; then
-    _model_lc=$(printf '%s' "$model_name" | tr '[:upper:]' '[:lower:]')
-    case "$_model_lc" in
-        *opus*)   _model_glyph="🎼" ;;
-        *fable*)  _model_glyph="🧚" ;;
-        *sonnet*) _model_glyph="📜" ;;
-        *haiku*)  _model_glyph="🌸" ;;
-        *)        _model_glyph="❓" ;;
-    esac
-    _model_caps=$(printf '%s' "$model_name" | tr '[:lower:]' '[:upper:]')
-    printf -v model_seg '%b' "${_model_glyph} ${SLATE_300}${_model_caps}${RESET}"
-fi
-
-# Algorithm version (LATEST). LOS version already lives in the identity cell.
-algo_seg=""
-[ -n "$ALGO_VERSION" ] && [ "$ALGO_VERSION" != "—" ] && printf -v algo_seg '%b' "${SLATE_400}⚙${ALGO_VERSION}${RESET}"
+_model_glyphs=(🌸 📜 🎼 🧚)         # Haiku · Sonnet · Opus · Fable
+_model_keys=(haiku sonnet opus fable)
+_model_lc=$(printf '%s' "${model_name:-}" | tr '[:upper:]' '[:lower:]')
+_model_cur=-1
+for _mi in "${!_model_keys[@]}"; do
+    case "$_model_lc" in *"${_model_keys[$_mi]}"*) _model_cur=$_mi; break ;; esac
+done
+_ml=""
+for _mi in "${!_model_glyphs[@]}"; do
+    [ "$_mi" -gt 0 ] && _ml+=" "
+    if [ "$_mi" -eq "$_model_cur" ]; then
+        _ml+="${SLATE_300}‹${_model_glyphs[$_mi]}›${RESET}"
+    else
+        _ml+="${SLATE_300}${_model_glyphs[$_mi]}${RESET}"
+    fi
+done
+printf -v model_seg '%b' "$_ml"
 
 # DOCTOR — delta-only capability regression. Renders ONLY when the precomputed
 # sidecar is non-empty (Doctor.ts writes it on regression); healthy = silent.
@@ -1093,35 +1095,6 @@ doctor_line=""
 _doctor_sidecar="$LIFEOS_DIR/MEMORY/STATE/capabilities-statusline.txt"
 if [ -s "$_doctor_sidecar" ]; then
     printf -v doctor_line '%b' "${SCALE_ORANGE}$(cat "$_doctor_sidecar" 2>/dev/null)${RESET}"
-fi
-
-# ─────────────────────────────────────────────────────────────────────────────
-# AGENTS ROSTER — model rungs; a rung is bright while a dispatched agent resolving
-# to it is live (<300s in agent-starts.json), else faint; plus ▸N in-flight count.
-# ─────────────────────────────────────────────────────────────────────────────
-agents_line=""
-_ag_file="$LIFEOS_DIR/MEMORY/OBSERVABILITY/agent-starts.json"
-if [ -f "$_ag_file" ]; then
-    _ag_now_ms=$(( _NOW * 1000 ))
-    _ag_data=$(jq -r --argjson now "$_ag_now_ms" '
-        [to_entries[] | .value | select((.epoch != null) and (($now - .epoch) < 300000) and (($now - .epoch) >= 0))] as $live |
-        ($live | length | tostring) + "\t" + ($live | map(.model // "" | ascii_downcase) | unique | join(","))
-    ' "$_ag_file" 2>/dev/null)
-    if [ -n "$_ag_data" ]; then
-        _ag_count="${_ag_data%%$'\t'*}"; _ag_count="${_ag_count:-0}"
-        _ag_models="${_ag_data#*$'\t'}"
-        _ag_rungs=(HAIKU SONNET OPUS FABLE)
-        _ag="${SLATE_500}🛰${RESET}"
-        for _r in "${_ag_rungs[@]}"; do
-            _rl=$(printf '%s' "$_r" | tr '[:upper:]' '[:lower:]')
-            case ",$_ag_models," in
-                *",$_rl,"*) _ag="${_ag} ${SLATE_300}${_r}${RESET}" ;;
-                *)          _ag="${_ag} ${_DIM}${_r}${RESET}" ;;
-            esac
-        done
-        [ "$_ag_count" -gt 0 ] 2>/dev/null && _ag="${_ag} ${SLATE_600}▸${RESET}${TEXT_LIME}${_ag_count}${RESET}"
-        printf -v agents_line '%b' "$_ag"
-    fi
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1257,7 +1230,6 @@ modelstate_line=""
 _ms_parts=()
 [ -n "$effort_seg" ] && _ms_parts+=("$effort_seg")
 [ -n "$model_seg" ]  && _ms_parts+=("$model_seg")
-[ -n "$algo_seg" ]   && _ms_parts+=("$algo_seg")
 if [ "${#_ms_parts[@]}" -gt 0 ]; then
     modelstate_line="${_ms_parts[0]}"
     _i=1
@@ -1274,7 +1246,6 @@ emit_extras() {
     [ -n "$doctor_line" ] && printf '%s\n' "$doctor_line"
     [ -n "$line3" ] && printf '%s\n' "$line3"
     [ -n "$modelstate_line" ] && printf '%s\n' "$modelstate_line"
-    [ -n "$agents_line" ] && printf '%s\n' "$agents_line"
     [ -n "$memhealth_line" ] && printf '%s\n' "$memhealth_line"
     [ -n "$ctxbudget_line" ] && printf '%s\n' "$ctxbudget_line"
     [ -n "$quote_line" ] && printf '%s\n' "$quote_line"
