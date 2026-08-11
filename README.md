@@ -29,7 +29,7 @@ Dense personal statusline for **[LifeOS 7.1.1](https://github.com/danielmiessler
 | | ✨ | <span style="color:rgb(150,190,40)">8</span>i | Last rating (i=implicit, e=explicit) |
 | | ⭐/🌟 | 12 | Ratings count (🌟 if rated in last hour) |
 | State | <span style="color:rgb(56,189,248)">❤️</span> <span style="color:rgb(147,197,253)">🪄</span> <span style="color:rgb(59,130,246)">🕊️</span> <span style="color:rgb(96,165,250)">🫂</span> <span style="color:rgb(37,99,235)">🪙</span> | 68% 31% 78% 84% 42% | Telos dimensions from `$LIFEOS_DIR/USER/TELOS/LIFEOS_STATE.json` — Health, Creative, Freedom, Relationships, Money. Missing dims render as `—` |
-| Quote | "…" — | "Strive not to be a success…" —Albert Einstein | Off by default. Opt-in via `statusline.showQuote: true` in `~/.claude/settings.json`; sourced from `$LIFEOS_DIR/.quote-cache` (ZenQuotes refresh) |
+| Quote | "…" — | "Strive not to be a success…" —Albert Einstein | Off by default. Opt-in via `statusline.showQuote: true` in `settings.user.json` (see Configuration); sourced from `$LIFEOS_DIR/.quote-cache` (ZenQuotes refresh) |
 
 ## Automatic resizing
 
@@ -56,6 +56,8 @@ LifeOS will clone the repo, read the setup instructions, and handle the rest.
 
 The statusline script lives under `$LIFEOS_DIR` (default `$HOME/.claude/LIFEOS`) — alongside the rest of your LifeOS-shipped assets. `$HOME/.claude` (`CLAUDE_HOME`) holds only Claude-Code–managed files (`settings.json`, `hooks/`).
 
+> ⚠️ **Never write to `~/.claude/settings.json` directly.** In LOS 7.1.1 it is a **generated artifact** — `MergeSettings` rebuilds it on every session start from `settings.system.json` (factory) ⊕ `settings.user.json` (yours), and re-attaches hooks from `hooks/hooks.json`. Anything placed directly in `settings.json` is **silently overwritten on the next session start** (this is the exact bug earlier versions of this README caused). So the statusLine goes into the **user overlay** and the update hook into the **hooks canon** — the sources the generator reads — never into the generated file.
+
 1. Copy the script:
 
 ```bash
@@ -64,43 +66,41 @@ cp statusline-command.sh "${LIFEOS_DIR:-$HOME/.claude/LIFEOS}/statusline-command
 chmod +x "${LIFEOS_DIR:-$HOME/.claude/LIFEOS}/statusline-command.sh"
 ```
 
-2. Add to `~/.claude/settings.json` (create the file with `{}` if it doesn't exist). Use the absolute path that `${LIFEOS_DIR:-$HOME/.claude/LIFEOS}` resolves to on your system — Claude Code does not expand env vars in this field:
+2. Register the statusLine in the **user overlay** `settings.user.json` — **not** `settings.json`. Create `$LIFEOS_DIR/USER/CONFIG/settings.user.json` with `{}` if it doesn't exist, then add:
 
 ```json
 {
   "statusLine": {
     "type": "command",
-    "command": "/absolute/path/to/LIFEOS/statusline-command.sh"
+    "command": "$HOME/.claude/LIFEOS/statusline-command.sh"
   }
 }
 ```
 
-3. Add the auto-update hook to `~/.claude/settings.json` under `hooks.SessionStart`. The hook command runs in a shell, so `$LIFEOS_DIR` does expand here:
+`MergeSettings` merges this into `settings.json` on every session start with *user-wins* semantics, so it survives regeneration. The `$HOME` is **not** expanded by the merge (the merged `settings.json` keeps the literal `$HOME/...` string) — Claude Code runs the statusLine `command` through a shell, which expands `$HOME` at execution time. (Verified on a live LOS 7.1.1 box: the generated `settings.json` carries the literal `$HOME` and the statusline renders correctly.)
+
+3. Register the **version-gated auto-update hook** in the **hooks canon** `~/.claude/hooks/hooks.json` — **not** `settings.json`. Append this object to the existing `SessionStart` group's `hooks` array (`MergeSettings` re-attaches `hooks/hooks.json` into the generated `settings.json`, so a hook registered here survives regeneration):
 
 ```json
 {
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "curl -fsS --retry 3 --retry-delay 2 --retry-all-errors --connect-timeout 5 --max-time 15 -o \"${LIFEOS_DIR:-$HOME/.claude/LIFEOS}/statusline-command.sh\" \"https://codeberg.org/ljubitje/lifeos-statusline/raw/branch/main/statusline-command.sh?t=$(date +%s)\" && chmod +x \"${LIFEOS_DIR:-$HOME/.claude/LIFEOS}/statusline-command.sh\" || { echo \"[statusline] codeberg fetch FAILED after 3 retries — update flow may be broken; using cached statusline\" >&2; echo \"$(date -Iseconds) statusline fetch failed\" >> \"${LIFEOS_DIR:-$HOME/.claude/LIFEOS}/MEMORY/STATE/statusline-fetch-failures.log\"; exit 1; }"
-          }
-        ]
-      }
-    ]
-  }
+  "type": "command",
+  "command": "D=\"${LIFEOS_DIR:-$HOME/.claude/LIFEOS}\"; mkdir -p \"$D/MEMORY/STATE\"; MK=\"$D/MEMORY/STATE/statusline-version.txt\"; RV=$(curl -fsS --connect-timeout 5 --max-time 10 --retry 1 --retry-all-errors \"https://codeberg.org/ljubitje/lifeos-statusline/raw/branch/main/VERSION?t=$(date +%s)\"); [ -n \"$RV\" ] && [ \"$RV\" != \"$(cat \"$MK\" 2>/dev/null)\" ] && { curl -fsS --connect-timeout 5 --max-time 20 --retry 2 --retry-delay 2 --retry-all-errors -o \"$D/statusline-command.sh.tmp\" \"https://codeberg.org/ljubitje/lifeos-statusline/raw/branch/main/statusline-command.sh?t=$(date +%s)\" && chmod +x \"$D/statusline-command.sh.tmp\" && mv \"$D/statusline-command.sh.tmp\" \"$D/statusline-command.sh\" && printf '%s' \"$RV\" > \"$MK\" || { echo \"[statusline] update to $RV FAILED — keeping cached\" >&2; echo \"$(date -Iseconds) statusline pull failed (v$RV)\" >> \"$D/MEMORY/STATE/statusline-fetch-failures.log\"; exit 1; }; }; exit 0",
+  "async": true,
+  "timeout": 30
 }
 ```
 
-This downloads the latest version on every session start. The `?t=` cache-buster bypasses Codeberg's CDN cache (5-min TTL). Each fetch has a 5-second connect timeout and a 15-second total cap, and **retries up to 3 times** (2s apart, `--retry-all-errors`) to ride out transient Codeberg latency spikes.
+## Auto-update (version-gated)
 
-It does **not** fail silently. If all retries are exhausted, the hook prints a clear error to stderr, appends a timestamped line to `$LIFEOS_DIR/MEMORY/STATE/statusline-fetch-failures.log`, and exits non-zero — so a genuinely broken update flow surfaces as a visible session-start hook error instead of rotting unnoticed. The previously-cached `statusline-command.sh` keeps rendering in the meantime, so a failed fetch never breaks your statusline.
+On each **session start** the hook fetches the repo's `VERSION` file — a tiny request — and compares it against the local marker `$LIFEOS_DIR/MEMORY/STATE/statusline-version.txt`. It downloads the full `statusline-command.sh` **only when the version changed**, writing it atomically (`.tmp` + `mv`) and recording the new version. The `?t=` cache-buster bypasses Codeberg's CDN cache (5-min TTL).
 
-## Auto-update
+There is no mid-session background polling — existing long-running sessions keep the version they started with. To pull a fresh version into a running session, restart Claude Code.
 
-The statusline auto-updates only on **session start**, via the `SessionStart` hook above. There is no mid-session background polling — existing long-running sessions keep the version they started with. To pull a fresh version into a running session, restart Claude Code.
+Failure handling: if Codeberg is unreachable the `VERSION` check finds nothing to do and the **cached script keeps rendering** — a slow or down Codeberg never breaks your statusline (a transient `curl` error line may show in the transcript, but the hook takes no action). But if the version *did* change and the script download then fails, the hook prints a clear error to stderr, appends a timestamped line to `$LIFEOS_DIR/MEMORY/STATE/statusline-fetch-failures.log`, and exits non-zero — so a genuinely broken update surfaces instead of rotting silently.
+
+The hook is `async` (never blocks session start) with a `timeout` of 30 s. Curl budgets: the VERSION check is `--max-time 10 --retry 1`; the (rare) script download is `--max-time 20 --retry 2 --retry-delay 2`. Under sustained Codeberg slowness the async hook may be killed at its timeout before a download lands — harmless (the cached script is untouched; the update simply retries next session).
+
+> **Maintainer note:** because updates are version-gated, **bump `VERSION` in this repo whenever `statusline-command.sh` changes** — otherwise installs won't pull the new script. (This is the trade-off for not re-downloading the 70 KB script every session.)
 
 To update manually in any LifeOS session, say:
 
@@ -108,7 +108,7 @@ To update manually in any LifeOS session, say:
 
 ## Configuration
 
-The statusline reads configuration from `settings.json`:
+The statusline **reads** these keys from the merged `settings.json` at runtime — but **set them in `settings.user.json`** (`$LIFEOS_DIR/USER/CONFIG/settings.user.json`), not in `settings.json` directly. `MergeSettings` folds the user overlay into `settings.json` at each session start (user-wins); anything written straight into the generated `settings.json` is overwritten on the next start.
 
 | Key | Default | Description |
 |-----|---------|-------------|
