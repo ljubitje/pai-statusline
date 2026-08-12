@@ -481,6 +481,20 @@ if [ -f "$RATINGS_FILE" ] && [ -s "$RATINGS_FILE" ]; then
         # Use cached values
         source "$LEARNING_CACHE"
     else
+        # Cache is stale/missing. NEVER compute synchronously here — the heavy
+        # jq over ratings.jsonl (thousands of lines) takes seconds and BLOCKS the
+        # render, so the harness shows a BLANK statusline on cold start. Instead:
+        # render from the stale cache now (or placeholders if none), and refresh
+        # the cache in a detached background job for the NEXT render.
+        if [ -f "$LEARNING_CACHE" ]; then
+            source "$LEARNING_CACHE"
+        else
+            total_count=0
+        fi
+        _l_lock="/tmp/pai-learning-refresh.lock"
+        if ! [ -f "$_l_lock" ] || [ $(($(date +%s) - $(get_mtime "$_l_lock"))) -gt 15 ]; then
+          touch "$_l_lock" 2>/dev/null
+          (
         # Compute fresh and cache
         # Extract RGB from SCALE_ vars for jq (single source of truth)
         # Vars are like '\033[38;2;R;G;Bm' — extract R;G;B, swap ; for ,
@@ -623,6 +637,10 @@ day_summary='$day_summary'
 trend='$trend'
 total_count=$total_count
 CACHE_EOF
+            rm -f "$_l_lock" 2>/dev/null
+          ) >/dev/null 2>&1 </dev/null &
+          disown 2>/dev/null
+        fi
     fi  # end cache computation
 
     if [ "$total_count" -gt 0 ] 2>/dev/null; then
