@@ -282,6 +282,7 @@ VERSION_DIM="$SLATE_600"
 # ─────────────────────────────────────────────────────────────────────────────
 VERSION_CACHE_SH="$LIFEOS_DIR/MEMORY/STATE/version-cache.sh"
 cc_latest=""
+lifeos_latest=""
 [ -f "$VERSION_CACHE_SH" ] && source "$VERSION_CACHE_SH"
 
 # Format version: hide if latest, dim outdated segments if not
@@ -309,7 +310,7 @@ format_version_display() {
     printf '%b' "$RESET"
 }
 
-lifeos_ver_display=$(format_version_display "$LIFEOS_VERSION" "" "$SLATE_500")
+lifeos_ver_display=$(format_version_display "$LIFEOS_VERSION" "$lifeos_latest" "$SLATE_500")
 cc_ver_display=$(format_version_display "$cc_version" "$cc_latest" "$SLATE_500")
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1373,15 +1374,21 @@ if ! [ -f "$_bg_lock" ] || [ $(($(date +%s) - $(get_mtime "$_bg_lock"))) -gt 10 
             fi
         fi
 
-        # Latest version cache refresh (CC from npm only). LOS is a personal fork —
-        # there's no meaningful upstream "latest" to diff against, so no repo fetch.
+        # Latest version cache refresh — CC from npm, LOS from the public upstream
+        # (danielmiessler/LifeOS) newest semver tag. Egress rides the box default
+        # route (tun0/VPN, same as the status/npm curls above); if the VPN is down
+        # the fetch blackholes in tun0 and times out rather than falling back to the
+        # LAN, so the residential IP is never exposed. A failed fetch keeps the prior
+        # cached value (never blanks the display).
         _ver_age=999999
         [ -f "$VERSION_CACHE_SH" ] && _ver_age=$(($(date +%s) - $(get_mtime "$VERSION_CACHE_SH")))
         if [ "$_ver_age" -gt 3600 ]; then
             _cc_lat=$(curl -s --max-time 3 "https://registry.npmjs.org/@anthropic-ai/claude-code/latest" 2>/dev/null | jq -r '.version // empty' 2>/dev/null)
-            if [ -n "$_cc_lat" ]; then
-                printf "cc_latest='%s'\n" "${_cc_lat:-}" > "$VERSION_CACHE_SH" 2>/dev/null
-            fi
+            _los_lat=$(timeout 6 git ls-remote --tags --sort=-v:refname https://github.com/danielmiessler/LifeOS 2>/dev/null \
+                | grep -oE 'refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 | sed 's#.*/v##')
+            [ -z "$_cc_lat" ]  && _cc_lat="$cc_latest"       # preserve prior on fetch failure
+            [ -z "$_los_lat" ] && _los_lat="$lifeos_latest"
+            printf "cc_latest='%s'\nlifeos_latest='%s'\n" "${_cc_lat:-}" "${_los_lat:-}" > "$VERSION_CACHE_SH" 2>/dev/null
         fi
 
         rm -f "$_bg_lock" 2>/dev/null
